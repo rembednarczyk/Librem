@@ -14,7 +14,9 @@ vi.mock('axios', () => {
   };
 });
 
-import { WikiAdapter, resolveWikiBaseUrl } from '../wiki.adapter';
+import https from 'https';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import { WikiAdapter, resolveWikiBaseUrl, buildWikiHttpsAgent } from '../wiki.adapter';
 
 describe('WikiAdapter', () => {
   let wikiAdapter: WikiAdapter;
@@ -126,6 +128,29 @@ describe('WikiAdapter', () => {
       mockGet.mockResolvedValueOnce({ data: { query: { pages: { '1': { revisions: [{ '*': 'X' }] } } } } });
       await wikiAdapter.fetchPageContent('T');
       expect(mockGet).toHaveBeenCalledWith('https://wiki-proxy.example.workers.dev', expect.anything());
+    });
+  });
+
+  describe('HTTPS agent (WIKI_HTTP_PROXY)', () => {
+    const prev = process.env.WIKI_HTTP_PROXY;
+    afterEach(() => {
+      if (prev === undefined) delete process.env.WIKI_HTTP_PROXY;
+      else process.env.WIKI_HTTP_PROXY = prev;
+    });
+
+    it('returns a plain keep-alive agent when unset', () => {
+      const agent = buildWikiHttpsAgent({} as NodeJS.ProcessEnv);
+      expect(agent).toBeInstanceOf(https.Agent);
+      expect(agent).not.toBeInstanceOf(HttpsProxyAgent);
+    });
+
+    it('returns an HttpsProxyAgent (CONNECT tunnel) when WIKI_HTTP_PROXY is set', () => {
+      const agent = buildWikiHttpsAgent({ WIKI_HTTP_PROXY: 'http://user:pass@proxy.example.com:8080' } as NodeJS.ProcessEnv);
+      expect(agent).toBeInstanceOf(HttpsProxyAgent);
+    });
+
+    it('ignores a blank/whitespace proxy value', () => {
+      expect(buildWikiHttpsAgent({ WIKI_HTTP_PROXY: '   ' } as NodeJS.ProcessEnv)).not.toBeInstanceOf(HttpsProxyAgent);
     });
   });
 });
