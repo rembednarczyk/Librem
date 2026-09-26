@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { mockGet } = vi.hoisted(() => ({
   mockGet: vi.fn()
@@ -14,7 +14,7 @@ vi.mock('axios', () => {
   };
 });
 
-import { WikiAdapter } from '../wiki.adapter';
+import { WikiAdapter, resolveWikiBaseUrl } from '../wiki.adapter';
 
 describe('WikiAdapter', () => {
   let wikiAdapter: WikiAdapter;
@@ -101,6 +101,31 @@ describe('WikiAdapter', () => {
       const { contents, failedTitles } = await wikiAdapter.fetchPagesContentBulk(['Solaris', 'Diuna']);
       expect(contents).toEqual({});
       expect(failedTitles).toEqual(['Solaris', 'Diuna']);
+    });
+  });
+
+  describe('egress override (WIKI_PROXY_URL)', () => {
+    const prev = process.env.WIKI_PROXY_URL;
+    afterEach(() => {
+      if (prev === undefined) delete process.env.WIKI_PROXY_URL;
+      else process.env.WIKI_PROXY_URL = prev;
+    });
+
+    it('defaults to the direct origin when unset', () => {
+      delete process.env.WIKI_PROXY_URL;
+      expect(resolveWikiBaseUrl({} as NodeJS.ProcessEnv)).toBe('https://encyklopediafantastyki.pl/api.php');
+    });
+
+    it('uses WIKI_PROXY_URL (trimmed) when set', () => {
+      expect(resolveWikiBaseUrl({ WIKI_PROXY_URL: '  https://wiki-proxy.example.workers.dev  ' } as NodeJS.ProcessEnv))
+        .toBe('https://wiki-proxy.example.workers.dev');
+    });
+
+    it('routes a real fetch through the proxy when set', async () => {
+      process.env.WIKI_PROXY_URL = 'https://wiki-proxy.example.workers.dev';
+      mockGet.mockResolvedValueOnce({ data: { query: { pages: { '1': { revisions: [{ '*': 'X' }] } } } } });
+      await wikiAdapter.fetchPageContent('T');
+      expect(mockGet).toHaveBeenCalledWith('https://wiki-proxy.example.workers.dev', expect.anything());
     });
   });
 });

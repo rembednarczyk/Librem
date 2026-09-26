@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.83.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.84.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 560 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 563 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,15 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.84.0** — **Konfigurowalny egress `WikiAdapter` + Cloudflare Worker (obejście blokady IP encyklopedii).**
+  POTWIERDZONE logiem Render: encyklopedia zwraca 403 (`ip_blocked`, zwykła strona Apache — NIE challenge CF) dla
+  IP datacenter Render; dotyczy podglądu cyklu ORAZ book sync (ta sama ścieżka). Fix na poziomie adaptera:
+  `resolveWikiBaseUrl()` (export, czytany per-call) zwraca `WIKI_PROXY_URL` gdy ustawione, inaczej origin
+  bezpośrednio (domyślnie, zero zmiany zachowania); opcjonalny `WIKI_PROXY_KEY` → nagłówek `X-Proxy-Key`. Nowy
+  `cloudflare/wiki-proxy.js`: reverse-proxy api.php (GET-only, gate na współdzielony sekret by nie był otwartym
+  proxy, descriptive bot-UA, edge-cache 5 min, przepuszcza status). 3 nowe testy egressu (default/override/realny
+  routing). `.env.example` + instrukcja wdrożenia w nagłówku Workera. WYMAGA wdrożenia Workera + env-ów na Render
+  (po stronie usera). 563 testy.
 - **1.83.0** — **Szyna zdarzeń stanu „przeczytane" (`ReadStateContext`) — cross-widget awareness.**
   AUDYT: oznaczanie „przeczytane"/„posiadam" jest dostępne z 5 miejsc (Regał drag&drop, statystyki:
   OwnedUnread/Postęp bibliotek/Książki-w-bibliotekach, Cykle). Dane ZAWSZE spójne (backend inwaliduje
@@ -1443,11 +1452,15 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
     proxy zmieniające IP JEST właściwym kierunkiem i NIE trzeba headless-browsera. CF Worker: darmowy, szybki,
     egress z IP Cloudflare (inne niż Render) — realna szansa, że przejdzie. RYZYKO: zakresy egress CF bywają też
     blokowane przez WAF-y; jeśli encyklopedia blokuje też CF, wróci 403. To 20-min eksperyment, nie pewnik.
-  - **DROGA WYJŚCIA (rekomendacja):** (1) `WikiAdapter` z KONFIGUROWALNYM egressem (env: URL proxy/bazowy) —
-    czysta hydraulika działająca dla DOWOLNego rozwiązania (CF Worker / proxy rezydencjalny / self-host), naprawia
-    też book sync; (2) jako pierwszy tani strzał: mały CF Worker proxujący `?title=` do api.php, `WikiAdapter`
-    celuje w Workera; (3) jeśli CF też blokowany → proxy rezydencjalny (płatny) albo scraping-API. Ortogonalnie
-    warto i tak: czytać najpierw WIERSZE bazy (Żniwa materializują tomy) i pytać wiki tylko o luki — mniej ruchu.
+  - **ZREALIZOWANE (1.84.0, hydraulika + Worker) — CZEKA NA WDROŻENIE PRZEZ USERA:** `WikiAdapter` ma teraz
+    konfigurowalny egress: `resolveWikiBaseUrl()` czyta `WIKI_PROXY_URL` (puste = origin bezpośrednio, zero zmiany),
+    `WIKI_PROXY_KEY` idzie nagłówkiem `X-Proxy-Key`. Działa dla DOWOLNego proxy i naprawia też book sync. Gotowy
+    `cloudflare/wiki-proxy.js` (reverse-proxy api.php, GET-only, gate na sekret, edge-cache 5 min, przepuszcza
+    status by realny 403 był widoczny). DO ZROBIENIA PO STRONIE USERA: wdrożyć Workera (dashboard/wrangler),
+    ustawić `PROXY_KEY` na Workerze + `WIKI_PROXY_URL`/`WIKI_PROXY_KEY` na Render, redeploy. Instrukcja w nagłówku
+    pliku Workera + `.env.example`. JEŚLI Worker też dostanie 403 (CF egress blokowany) → te same 2 env-y, ale URL
+    proxy rezydencjalnego. ORTOGONALNIE (nie zrobione, opcjonalne): czytać najpierw WIERSZE bazy (Żniwa materializują
+    tomy) i pytać wiki tylko o luki — mniej ruchu, ale nie usuwa samej blokady.
 - **Katalog: klik w ikonę książki → podgląd szczegółów z Encyklopedii (NOWY feature, pomysł usera).** Ikona
   `BookMarked` w `BookResultCard` (linia ~46) jest dziś CZYSTO DEKORACYJNA (brak `onClick`). Pomysł: klik otwiera
   popover ze szczegółami książki, analogicznie do `CyclePanel`, przez nowy endpoint serwerowy pobierający stronę
