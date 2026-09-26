@@ -1452,15 +1452,26 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
     proxy zmieniające IP JEST właściwym kierunkiem i NIE trzeba headless-browsera. CF Worker: darmowy, szybki,
     egress z IP Cloudflare (inne niż Render) — realna szansa, że przejdzie. RYZYKO: zakresy egress CF bywają też
     blokowane przez WAF-y; jeśli encyklopedia blokuje też CF, wróci 403. To 20-min eksperyment, nie pewnik.
-  - **ZREALIZOWANE (1.84.0, hydraulika + Worker) — CZEKA NA WDROŻENIE PRZEZ USERA:** `WikiAdapter` ma teraz
-    konfigurowalny egress: `resolveWikiBaseUrl()` czyta `WIKI_PROXY_URL` (puste = origin bezpośrednio, zero zmiany),
-    `WIKI_PROXY_KEY` idzie nagłówkiem `X-Proxy-Key`. Działa dla DOWOLNego proxy i naprawia też book sync. Gotowy
-    `cloudflare/wiki-proxy.js` (reverse-proxy api.php, GET-only, gate na sekret, edge-cache 5 min, przepuszcza
-    status by realny 403 był widoczny). DO ZROBIENIA PO STRONIE USERA: wdrożyć Workera (dashboard/wrangler),
-    ustawić `PROXY_KEY` na Workerze + `WIKI_PROXY_URL`/`WIKI_PROXY_KEY` na Render, redeploy. Instrukcja w nagłówku
-    pliku Workera + `.env.example`. JEŚLI Worker też dostanie 403 (CF egress blokowany) → te same 2 env-y, ale URL
-    proxy rezydencjalnego. ORTOGONALNIE (nie zrobione, opcjonalne): czytać najpierw WIERSZE bazy (Żniwa materializują
-    tomy) i pytać wiki tylko o luki — mniej ruchu, ale nie usuwa samej blokady.
+  - **HYDRAULIKA GOTOWA (1.84.0):** `WikiAdapter` ma konfigurowalny egress — `resolveWikiBaseUrl()` czyta
+    `WIKI_PROXY_URL` (puste = origin bezpośrednio, zero zmiany), `WIKI_PROXY_KEY` → nagłówek `X-Proxy-Key`. Działa
+    dla DOWOLNego reverse-proxy i naprawia też book sync. Gotowy `cloudflare/wiki-proxy.js` (GET-only, gate na
+    sekret, edge-cache 5 min, przepuszcza status). To ZOSTAJE w repo jako punkt wejścia dla przyszłego proxy.
+  - **WYNIK EKSPERYMENTU CF WORKER (2026-09-26): NIE DZIAŁA — CF egress TEŻ zablokowany.** User wdrożył Workera
+    (`librem.remuerte.workers.dev`), ustawił `PROXY_KEY`, przetestował curlem z poprawnym nagłówkiem. Bramka
+    Workera PRZESZŁA (klucz OK — inaczej byłoby samo „Forbidden"), ale encyklopedia zwróciła przez Workera TĘ SAMĄ
+    stronę Apache „403 / You don't have permission" → origin odrzuca też IP Cloudflare. WNIOSEK: blokada obejmuje
+    zakresy IP/ASN chmury OGÓLNIE (dwa różne UA — fałszywy Chrome z Render + `LibremBot` z CF — dwa różne IP
+    chmurowe, oba 403 → to IP, nie UA). Potrzebny adres NIE-chmurowy (rezydencjalny). CF Worker = ślepy zaułek.
+  - **DECYZJA USERA (2026-09-26): PARKUJEMY.** Nie budujemy proxy teraz. Hydraulika + Worker zostają. Gdy
+    odparkujemy, opcje (od najpewniejszej): (1) PROXY REZYDENCJALNE (płatne, grosze przy tym ruchu) — wymaga dodania
+    do adaptera standardowego protokołu proxy (np. env `WIKI_HTTP_PROXY` + `HttpsProxyAgent`; obecny `WIKI_PROXY_URL`
+    to URL-replay, nie działa dla klasycznego proxy); (2) SELF-HOST reverse-proxy na domowym IP — działa z obecną
+    hydrauliką (`WIKI_PROXY_URL` → dom); (3) podgląd cyklu z WIERSZY bazy (Żniwa) — znosi ból podglądu za darmo, ale
+    book sync/Żniwa dalej wymagają proxy.
+  - **RYZYKO DO POTWIERDZENIA:** skoro to blok IP na chmurę, BOOK SYNC z Rendera najprawdopodobniej też jest teraz
+    martwy (identyczne wywołania `api.php`). User dawno nie synchronizował — warto odpalić małą synchronizację i
+    sprawdzić, czy nie leci 403. Jeśli tak → proxy staje się nie „nice-to-have dla cyklu", tylko WARUNKIEM działania
+    core'owego syncu.
 - **Katalog: klik w ikonę książki → podgląd szczegółów z Encyklopedii (NOWY feature, pomysł usera).** Ikona
   `BookMarked` w `BookResultCard` (linia ~46) jest dziś CZYSTO DEKORACYJNA (brak `onClick`). Pomysł: klik otwiera
   popover ze szczegółami książki, analogicznie do `CyclePanel`, przez nowy endpoint serwerowy pobierający stronę
