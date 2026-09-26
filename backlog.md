@@ -1432,22 +1432,22 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
   host + adapter + IP Render, co book sync. Jeden podgląd bez cache = do ~34 SEKWENCYJNYCH żądań
   (`MAX_HOPS=15` w każdą stronę po łańcuchu `poprzednia`/`następna` + search + sąsiedzi), każde `withRetry(3, 2s)`,
   timeout 30 s. Cache: `BoundedCache(500)` w pamięci procesu → ZIMNY po każdym deployu.
-  - **WERYFIKACJA HIPOTEZY (do zrobienia PRZED wyborem rozwiązania):** skoro book sync używa identycznej ścieżki
-    i działa, blanketowa blokada IP Render jest MAŁO prawdopodobna. Bardziej realne: (a) rate-limit encyklopedii na
-    BURST ~34 szybkich żądań z jednego IP (403/429), (b) sama LATENCJA 34 żądań sekwencyjnych (odczuwalne jako
-    „zawiesza się"), (c) pojedynczy 403/429 wywalający cały walk. Adapter JUŻ klasyfikuje błędy
-    (`WikiFetchError.classification`/`userHint`) — pierwszy krok to ODCZYTAĆ REALNY błąd z produkcji (status/klasa),
-    bo bez tego dobór rozwiązania to zgadywanie.
-  - **Cloudflare Worker (pomysł usera) — OCENA:** reverse-proxy przez CF Workera zmienia IP wyjścia na CF. Pomaga
-    TYLKO gdy przyczyna jest IP-owa (blok/limit na IP Render). Jeśli przyczyna to wolumen/latencja — nie pomoże,
-    doda hop. Uwaga: encyklopedia może sama siedzieć za Cloudflare (challenge dla datacenter) — wtedy CF→CF bywa
-    inaczej traktowane, ale to do sprawdzenia empirycznie, nie z góry.
-  - **ALTERNATYWY (tańsze, bez nowej infry):** (1) ZMNIEJSZYĆ liczbę fetchy — `p-limit` na sąsiadów + krótszy
-    `MAX_HOPS`; (2) czytać najpierw WIERSZE bazy (Żniwa już materializują tomy cyklu jako wiersze `Cykl`) i pytać
-    wiki TYLKO o luki — realny podgląd często nie potrzemuje walka po encyklopedii; (3) throttle+jitter jak w
-    ścieżce Vinted; (4) TRWAŁY cache podglądu (przeżywający deploy) zamiast `BoundedCache` w RAM.
-    REKOMENDACJA: najpierw (verify realny błąd) → potem (2)/(1) jako pierwszy strzał; CF Worker dopiero gdy błąd
-    okaże się IP-owy.
+  - **POTWIERDZONE (log Render, 2026-09-26):** `class=ip_blocked, status=403`, body = ZWYKŁA strona Apache
+    „403 Forbidden / You don't have permission to access this resource" — czyli ORIGIN encyklopedii odrzuca IP,
+    a NIE challenge Cloudflare (brak strony CF, brak JS-challenge). Retry `withRetry` też dostaje 403 (twardy blok
+    na zasób, nie chwilowy rate-limit). Konsekwencja: to blokada IP/ASN datacenter Render, a NIE wymaga
+    przeglądarki/`cf_clearance` (inaczej niż Vinted) — wystarczy INNE, niedatacenterowe źródłowe IP.
+    UWAGA: skoro to blok IP, book sync leci tą samą ścieżką → prawdopodobnie też oberwie 403 (do potwierdzenia,
+    ale to znaczy, że fix należy zrobić na poziomie `WikiAdapter`, nie tylko endpointu cyklu — naprawia OBA).
+  - **Cloudflare Worker (pomysł usera) — OCENA po logu:** ponieważ to zwykły 403 origINU (nie challenge),
+    proxy zmieniające IP JEST właściwym kierunkiem i NIE trzeba headless-browsera. CF Worker: darmowy, szybki,
+    egress z IP Cloudflare (inne niż Render) — realna szansa, że przejdzie. RYZYKO: zakresy egress CF bywają też
+    blokowane przez WAF-y; jeśli encyklopedia blokuje też CF, wróci 403. To 20-min eksperyment, nie pewnik.
+  - **DROGA WYJŚCIA (rekomendacja):** (1) `WikiAdapter` z KONFIGUROWALNYM egressem (env: URL proxy/bazowy) —
+    czysta hydraulika działająca dla DOWOLNego rozwiązania (CF Worker / proxy rezydencjalny / self-host), naprawia
+    też book sync; (2) jako pierwszy tani strzał: mały CF Worker proxujący `?title=` do api.php, `WikiAdapter`
+    celuje w Workera; (3) jeśli CF też blokowany → proxy rezydencjalny (płatny) albo scraping-API. Ortogonalnie
+    warto i tak: czytać najpierw WIERSZE bazy (Żniwa materializują tomy) i pytać wiki tylko o luki — mniej ruchu.
 - **Katalog: klik w ikonę książki → podgląd szczegółów z Encyklopedii (NOWY feature, pomysł usera).** Ikona
   `BookMarked` w `BookResultCard` (linia ~46) jest dziś CZYSTO DEKORACYJNA (brak `onClick`). Pomysł: klik otwiera
   popover ze szczegółami książki, analogicznie do `CyclePanel`, przez nowy endpoint serwerowy pobierający stronę
