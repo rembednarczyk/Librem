@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.82.1** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.83.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 555 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 560 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,23 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.83.0** — **Szyna zdarzeń stanu „przeczytane" (`ReadStateContext`) — cross-widget awareness.**
+  AUDYT: oznaczanie „przeczytane"/„posiadam" jest dostępne z 5 miejsc (Regał drag&drop, statystyki:
+  OwnedUnread/Postęp bibliotek/Książki-w-bibliotekach, Cykle). Dane ZAWSZE spójne (backend inwaliduje
+  `booksCache` na każdym zapisie — `mutateMultiSelect` + `setReadDate`), a między zakładkami spójność
+  daje remount+`?t=` na fetchu. Realna luka była JEDNA: w zakładce Kolekcja `CyclesHarvestCard` ma własny
+  hook (`useCyclesHarvest`), więc oznaczenie w Cyklach nie odświeżało statystyk (KPI/tempo/OwnedUnread)
+  i odwrotnie. FIX (wybór usera: wariant systemowy, nie chirurgiczny): `src/contexts/ReadStateContext.tsx`
+  — malutki pub/sub (ref-backed Set, nie state; null-safe poza providerem). Każdy UDANY zapis publikuje
+  `notifyReadChange()`, każdy widżet czytający subskrybuje własny refetch (`useReadStateListener`).
+  Podpięci PUBLISHERZY: `useMarkAsRead` (tylko nie-filialne znaczniki — filia zostaje optymistyczna przez
+  read-after-write lag Notion), `useCyclesHarvest.toggleSource`, `useShelfMutations.applyReadChange`
+  (jednorodność; Regał dziś bez współzamontowanego subskrybenta). SUBSKRYBENCI: `useStats.fetchStats`,
+  `useCyclesHarvest.fetchHarvest(silent)`. `useBooks` (Regał) CELOWO nie subskrybuje (optymistyczny,
+  nigdy nie współzamontowany — subskrypcja = refetch całego indeksu na każdy drag). Provider w `main.tsx`.
+  5 nowych testów szyny (dispatch, ref-latest, unmount, throw-isolation, brak-providera). 560 testów.
+  UWAGA: „wyciągnięcie przycisku do wspólnego komponentu" (pierwotny pomysł) NIE rozwiązałoby awareness
+  (to problem niezależnych hooków danych, nie markupu) — nadal otwarte jako czysty DRY (5 kopii przycisku).
 - **1.82.1** — **Pin wersji Node (`.node-version` = 20) + urealniona sekcja wdrożenia w README.**
   Render wybiera Node wg priorytetu `NODE_VERSION` → `.node-version` → `.nvmrc` → `engines`, a jego
   DOMYŚLNA wersja zależy od DATY UTWORZENIA serwisu i rośnie (dla serwisów tworzonych po 2026-09-17 to
