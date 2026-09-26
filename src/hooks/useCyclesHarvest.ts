@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { markReadRequest } from "../utils/http";
+import { useReadStateListener, useReadStateNotifier } from "../contexts/ReadStateContext";
 
 export interface VolumeOffer {
   price: number;
@@ -41,6 +42,7 @@ export function useCyclesHarvest() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const notifyReadChange = useReadStateNotifier();
 
   // `silent` = background refresh (after marking a volume) without flashing the whole card.
   // `fresh` = skip the 5-min book cache on the server (manual „Odśwież Dane").
@@ -68,15 +70,22 @@ export function useCyclesHarvest() {
     setError(null);
     try {
       await markReadRequest(id, tag, active, "Nie udało się zmienić statusu tomu.");
-      await fetchHarvest(true);
+      // Publish rather than refetch directly: the bus refreshes THIS card (we
+      // subscribe below) AND the sibling stats — „Przeczytane"/„Posiadam" feed
+      // KPI, tempo czytania and „Posiadane nieprzeczytane" too.
+      notifyReadChange();
     } catch (e: any) {
       setError(e?.message || "Nie udało się zmienić statusu tomu.");
     } finally {
       setBusyId(null);
     }
-  }, [fetchHarvest]);
+  }, [notifyReadChange]);
 
   useEffect(() => { fetchHarvest(); }, [fetchHarvest]);
+
+  // Refresh when a volume is marked here OR when a mark elsewhere (stats) touches
+  // a book that's also a cycle volume. `silent` = no card-wide loading flash.
+  useReadStateListener(useCallback(() => { fetchHarvest(true); }, [fetchHarvest]));
 
   return { view, loading, error, busyId, fetchHarvest, toggleSource };
 }

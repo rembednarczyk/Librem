@@ -3,6 +3,7 @@ import { BookIndexEntry } from "../types";
 import { ReadOverrides } from "../utils/bookshelf";
 import { useMarkRead } from "./useMarkRead";
 import { useShelfOrder } from "./useShelfOrder";
+import { useReadStateNotifier } from "../contexts/ReadStateContext";
 
 /** One row of a precise-drop order plan (from `planInsertion`). */
 export interface OrderChange {
@@ -22,6 +23,7 @@ export interface OrderChange {
 export function useShelfMutations() {
   const { setRead } = useMarkRead();
   const { saveOrders } = useShelfOrder();
+  const notifyReadChange = useReadStateNotifier();
 
   const [overrides, setOverrides] = useState<ReadOverrides>({});
   const [orderOverrides, setOrderOverrides] = useState<Record<string, number>>({});
@@ -46,6 +48,10 @@ export function useShelfMutations() {
           const desired = pendingRef.current[book.id];
           delete pendingRef.current[book.id];
           await setRead(book.id, desired);
+          // Publish so any co-mounted read-state widget refreshes. Today the shelf
+          // is on its own tab (no subscriber mounted) and stays optimistic; this
+          // keeps the invariant „every successful read write publishes".
+          notifyReadChange();
         }
       } catch (e: any) {
         // Save didn't go through — revert to the DB state and show the error.
@@ -56,7 +62,7 @@ export function useShelfMutations() {
         runningRef.current.delete(book.id);
       }
     })();
-  }, [setRead]);
+  }, [setRead, notifyReadChange]);
 
   /** Optimistic manual-order change (precise drop) + `saveOrders` with rollback. */
   const applyOrderPlan = useCallback((book: BookIndexEntry, orders: OrderChange[]) => {

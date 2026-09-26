@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.82.1** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.84.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 555 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 563 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,32 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.84.0** — **Konfigurowalny egress `WikiAdapter` + Cloudflare Worker (obejście blokady IP encyklopedii).**
+  POTWIERDZONE logiem Render: encyklopedia zwraca 403 (`ip_blocked`, zwykła strona Apache — NIE challenge CF) dla
+  IP datacenter Render; dotyczy podglądu cyklu ORAZ book sync (ta sama ścieżka). Fix na poziomie adaptera:
+  `resolveWikiBaseUrl()` (export, czytany per-call) zwraca `WIKI_PROXY_URL` gdy ustawione, inaczej origin
+  bezpośrednio (domyślnie, zero zmiany zachowania); opcjonalny `WIKI_PROXY_KEY` → nagłówek `X-Proxy-Key`. Nowy
+  `cloudflare/wiki-proxy.js`: reverse-proxy api.php (GET-only, gate na współdzielony sekret by nie był otwartym
+  proxy, descriptive bot-UA, edge-cache 5 min, przepuszcza status). 3 nowe testy egressu (default/override/realny
+  routing). `.env.example` + instrukcja wdrożenia w nagłówku Workera. WYMAGA wdrożenia Workera + env-ów na Render
+  (po stronie usera). 563 testy.
+- **1.83.0** — **Szyna zdarzeń stanu „przeczytane" (`ReadStateContext`) — cross-widget awareness.**
+  AUDYT: oznaczanie „przeczytane"/„posiadam" jest dostępne z 5 miejsc (Regał drag&drop, statystyki:
+  OwnedUnread/Postęp bibliotek/Książki-w-bibliotekach, Cykle). Dane ZAWSZE spójne (backend inwaliduje
+  `booksCache` na każdym zapisie — `mutateMultiSelect` + `setReadDate`), a między zakładkami spójność
+  daje remount+`?t=` na fetchu. Realna luka była JEDNA: w zakładce Kolekcja `CyclesHarvestCard` ma własny
+  hook (`useCyclesHarvest`), więc oznaczenie w Cyklach nie odświeżało statystyk (KPI/tempo/OwnedUnread)
+  i odwrotnie. FIX (wybór usera: wariant systemowy, nie chirurgiczny): `src/contexts/ReadStateContext.tsx`
+  — malutki pub/sub (ref-backed Set, nie state; null-safe poza providerem). Każdy UDANY zapis publikuje
+  `notifyReadChange()`, każdy widżet czytający subskrybuje własny refetch (`useReadStateListener`).
+  Podpięci PUBLISHERZY: `useMarkAsRead` (tylko nie-filialne znaczniki — filia zostaje optymistyczna przez
+  read-after-write lag Notion), `useCyclesHarvest.toggleSource`, `useShelfMutations.applyReadChange`
+  (jednorodność; Regał dziś bez współzamontowanego subskrybenta). SUBSKRYBENCI: `useStats.fetchStats`,
+  `useCyclesHarvest.fetchHarvest(silent)`. `useBooks` (Regał) CELOWO nie subskrybuje (optymistyczny,
+  nigdy nie współzamontowany — subskrypcja = refetch całego indeksu na każdy drag). Provider w `main.tsx`.
+  5 nowych testów szyny (dispatch, ref-latest, unmount, throw-isolation, brak-providera). 560 testów.
+  UWAGA: „wyciągnięcie przycisku do wspólnego komponentu" (pierwotny pomysł) NIE rozwiązałoby awareness
+  (to problem niezależnych hooków danych, nie markupu) — nadal otwarte jako czysty DRY (5 kopii przycisku).
 - **1.82.1** — **Pin wersji Node (`.node-version` = 20) + urealniona sekcja wdrożenia w README.**
   Render wybiera Node wg priorytetu `NODE_VERSION` → `.node-version` → `.nvmrc` → `engines`, a jego
   DOMYŚLNA wersja zależy od DATY UTWORZENIA serwisu i rośnie (dla serwisów tworzonych po 2026-09-17 to
@@ -1407,6 +1433,41 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
 - **1.0.0** — Stan bazowy.
 
 ## Otwarte pozycje
+
+- **Podgląd cyklu (Katalog) — fetch z Encyklopedii bywa zawodny na produkcji; ewent. proxy egress.** ZGŁOSZENIE
+  usera: po kliknięciu badge cyklu w Katalogu podgląd (`CyclePanel` → `useCycle` → `GET /api/cycle`) czasem nie
+  wchodzi; hipoteza usera: „blokowane przez Render". MECHANIZM (zweryfikowany w kodzie): fetch jest SERWEROWY —
+  `CycleLookupService` → `WikiAdapter` → `https://encyklopediafantastyki.pl/api.php` (MediaWiki), czyli TEN SAM
+  host + adapter + IP Render, co book sync. Jeden podgląd bez cache = do ~34 SEKWENCYJNYCH żądań
+  (`MAX_HOPS=15` w każdą stronę po łańcuchu `poprzednia`/`następna` + search + sąsiedzi), każde `withRetry(3, 2s)`,
+  timeout 30 s. Cache: `BoundedCache(500)` w pamięci procesu → ZIMNY po każdym deployu.
+  - **POTWIERDZONE (log Render, 2026-09-26):** `class=ip_blocked, status=403`, body = ZWYKŁA strona Apache
+    „403 Forbidden / You don't have permission to access this resource" — czyli ORIGIN encyklopedii odrzuca IP,
+    a NIE challenge Cloudflare (brak strony CF, brak JS-challenge). Retry `withRetry` też dostaje 403 (twardy blok
+    na zasób, nie chwilowy rate-limit). Konsekwencja: to blokada IP/ASN datacenter Render, a NIE wymaga
+    przeglądarki/`cf_clearance` (inaczej niż Vinted) — wystarczy INNE, niedatacenterowe źródłowe IP.
+    UWAGA: skoro to blok IP, book sync leci tą samą ścieżką → prawdopodobnie też oberwie 403 (do potwierdzenia,
+    ale to znaczy, że fix należy zrobić na poziomie `WikiAdapter`, nie tylko endpointu cyklu — naprawia OBA).
+  - **Cloudflare Worker (pomysł usera) — OCENA po logu:** ponieważ to zwykły 403 origINU (nie challenge),
+    proxy zmieniające IP JEST właściwym kierunkiem i NIE trzeba headless-browsera. CF Worker: darmowy, szybki,
+    egress z IP Cloudflare (inne niż Render) — realna szansa, że przejdzie. RYZYKO: zakresy egress CF bywają też
+    blokowane przez WAF-y; jeśli encyklopedia blokuje też CF, wróci 403. To 20-min eksperyment, nie pewnik.
+  - **ZREALIZOWANE (1.84.0, hydraulika + Worker) — CZEKA NA WDROŻENIE PRZEZ USERA:** `WikiAdapter` ma teraz
+    konfigurowalny egress: `resolveWikiBaseUrl()` czyta `WIKI_PROXY_URL` (puste = origin bezpośrednio, zero zmiany),
+    `WIKI_PROXY_KEY` idzie nagłówkiem `X-Proxy-Key`. Działa dla DOWOLNego proxy i naprawia też book sync. Gotowy
+    `cloudflare/wiki-proxy.js` (reverse-proxy api.php, GET-only, gate na sekret, edge-cache 5 min, przepuszcza
+    status by realny 403 był widoczny). DO ZROBIENIA PO STRONIE USERA: wdrożyć Workera (dashboard/wrangler),
+    ustawić `PROXY_KEY` na Workerze + `WIKI_PROXY_URL`/`WIKI_PROXY_KEY` na Render, redeploy. Instrukcja w nagłówku
+    pliku Workera + `.env.example`. JEŚLI Worker też dostanie 403 (CF egress blokowany) → te same 2 env-y, ale URL
+    proxy rezydencjalnego. ORTOGONALNIE (nie zrobione, opcjonalne): czytać najpierw WIERSZE bazy (Żniwa materializują
+    tomy) i pytać wiki tylko o luki — mniej ruchu, ale nie usuwa samej blokady.
+- **Katalog: klik w ikonę książki → podgląd szczegółów z Encyklopedii (NOWY feature, pomysł usera).** Ikona
+  `BookMarked` w `BookResultCard` (linia ~46) jest dziś CZYSTO DEKORACYJNA (brak `onClick`). Pomysł: klik otwiera
+  popover ze szczegółami książki, analogicznie do `CyclePanel`, przez nowy endpoint serwerowy pobierający stronę
+  wiki tej książki (1 fetch, nie ~34 — dużo lżejszy niż podgląd cyklu). ZALEŻNOŚĆ: dokłada ruch do tego samego
+  egressu co wyżej, więc sensownie robić PO rozstrzygnięciu kwestii pobierania z Encyklopedii. Reuse:
+  `WikiAdapter.fetchPageContent` + parser pól (autor/wydania/seria już parsowane w `wiki.parser`), wzorzec
+  popovera i `computePopoverPosition` z `CyclePanel`.
 
 - **Katalog: skaner kodów kreskowych (mobile) — feature ZREALIZOWANY (A+B), 3 PR-y.** Cel: LOOKUP
   („czy ta fizyczna książka to jedna z moich śledzonych nagrodowych?"), NIE dodawanie do bazy. Decyzje

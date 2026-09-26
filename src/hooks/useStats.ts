@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useReadStateListener } from "../contexts/ReadStateContext";
 
 export type {
   AuthorStat, AwardCoverageStat, YearlyStat, LibraryStat, IdentifiedBook, AvailabilityStats,
@@ -47,6 +48,10 @@ export function useStats() {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
+
+  // A mark („Przeczytane"/„Posiadam") from any widget — even another card in this
+  // same tab, like „Cykle" — refreshes the derived stats (KPI, tempo, posiadane).
+  useReadStateListener(fetchStats);
 
   return { stats, loading, error, fetchStats, addBookToLibrarySection };
 }

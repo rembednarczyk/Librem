@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import type { IdentifiedBooks } from "../types/stats";
 import { markReadRequest } from "../utils/http";
+import { useReadStateNotifier } from "../contexts/ReadStateContext";
 
 type BookRef = { id: string; title: string; author: string; year?: number | null };
 
@@ -24,6 +25,7 @@ interface Deps {
 export function useMarkAsRead({ identifiedBooks, addBookToLibrarySection, fetchStats }: Deps) {
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markedIds, setMarkedIds] = useState<Set<string>>(new Set());
+  const notifyReadChange = useReadStateNotifier();
 
   const markAsRead = useCallback(async (pageId: string, tag?: string) => {
     if (markingId) return;
@@ -35,14 +37,16 @@ export function useMarkAsRead({ identifiedBooks, addBookToLibrarySection, fetchS
 
       // A branch tag adds the item only to the „Książki dostępne w
       // bibliotekach" section — we update it optimistically (immediately, resilient to
-      // Notion's read lag). „Przeczytane" changes many cross-sections
-      // (authors, chronology, owned), so there we do a full refetch.
+      // Notion's read lag) and DON'T publish: a forced refetch could race Notion
+      // and revert the optimistic row, and a branch tag crosses no other widget.
+      // „Przeczytane" changes many cross-sections (authors, chronology, owned) and
+      // also „Cykle", so we publish — every read-state widget refreshes itself.
       if (LIBRARY_TAGS.includes(sourceTag)) {
         const book = Object.values(identifiedBooks).flat().find(b => b.id === pageId);
         if (book) addBookToLibrarySection(sourceTag, book);
         else await fetchStats();
       } else {
-        await fetchStats();
+        notifyReadChange();
       }
     } catch (err: any) {
       console.error(err.message);
@@ -50,7 +54,7 @@ export function useMarkAsRead({ identifiedBooks, addBookToLibrarySection, fetchS
     } finally {
       setMarkingId(null);
     }
-  }, [markingId, identifiedBooks, addBookToLibrarySection, fetchStats]);
+  }, [markingId, identifiedBooks, addBookToLibrarySection, fetchStats, notifyReadChange]);
 
   return { markingId, markedIds, markAsRead };
 }

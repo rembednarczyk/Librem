@@ -9,6 +9,25 @@ const log = createLogger("WikiAdapter");
 const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true });
 
+/** The encyclopedia's MediaWiki API — the direct origin. */
+const WIKI_ORIGIN = "https://encyklopediafantastyki.pl/api.php";
+
+/**
+ * Egress target for the encyclopedia API. The origin 403-blocks datacenter IPs
+ * (e.g. Render), so `WIKI_PROXY_URL` can point every request at a proxy whose IP
+ * the origin accepts — typically a Cloudflare Worker that replays the same query
+ * params to `api.php` (see `cloudflare/wiki-proxy.js`). Unset = direct (default,
+ * unchanged). Read at call time so it's env-driven and testable.
+ */
+export function resolveWikiBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return env.WIKI_PROXY_URL?.trim() || WIKI_ORIGIN;
+}
+
+// Shared secret for the proxy: sent as a header so the Worker can reject anyone
+// but us (an open proxy would get the Worker itself blocked). Harmless when
+// talking to the origin directly — MediaWiki ignores the unknown header.
+const proxyKey = process.env.WIKI_PROXY_KEY?.trim();
+
 const wikiAxios = axios.create({
   httpAgent,
   httpsAgent,
@@ -16,7 +35,8 @@ const wikiAxios = axios.create({
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7'
+    'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+    ...(proxyKey ? { 'X-Proxy-Key': proxyKey } : {})
   }
 });
 
@@ -41,7 +61,8 @@ export class WikiFetchError extends Error {
 }
 
 export class WikiAdapter {
-  private readonly baseUrl = "https://encyklopediafantastyki.pl/api.php";
+  /** Direct origin, or the proxy from `WIKI_PROXY_URL`. Resolved per call. */
+  private get baseUrl(): string { return resolveWikiBaseUrl(); }
 
   /**
    * Returns a page's wikitext or "" when the page doesn't exist.
