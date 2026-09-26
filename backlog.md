@@ -1425,6 +1425,37 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
 
 ## Otwarte pozycje
 
+- **Podgląd cyklu (Katalog) — fetch z Encyklopedii bywa zawodny na produkcji; ewent. proxy egress.** ZGŁOSZENIE
+  usera: po kliknięciu badge cyklu w Katalogu podgląd (`CyclePanel` → `useCycle` → `GET /api/cycle`) czasem nie
+  wchodzi; hipoteza usera: „blokowane przez Render". MECHANIZM (zweryfikowany w kodzie): fetch jest SERWEROWY —
+  `CycleLookupService` → `WikiAdapter` → `https://encyklopediafantastyki.pl/api.php` (MediaWiki), czyli TEN SAM
+  host + adapter + IP Render, co book sync. Jeden podgląd bez cache = do ~34 SEKWENCYJNYCH żądań
+  (`MAX_HOPS=15` w każdą stronę po łańcuchu `poprzednia`/`następna` + search + sąsiedzi), każde `withRetry(3, 2s)`,
+  timeout 30 s. Cache: `BoundedCache(500)` w pamięci procesu → ZIMNY po każdym deployu.
+  - **WERYFIKACJA HIPOTEZY (do zrobienia PRZED wyborem rozwiązania):** skoro book sync używa identycznej ścieżki
+    i działa, blanketowa blokada IP Render jest MAŁO prawdopodobna. Bardziej realne: (a) rate-limit encyklopedii na
+    BURST ~34 szybkich żądań z jednego IP (403/429), (b) sama LATENCJA 34 żądań sekwencyjnych (odczuwalne jako
+    „zawiesza się"), (c) pojedynczy 403/429 wywalający cały walk. Adapter JUŻ klasyfikuje błędy
+    (`WikiFetchError.classification`/`userHint`) — pierwszy krok to ODCZYTAĆ REALNY błąd z produkcji (status/klasa),
+    bo bez tego dobór rozwiązania to zgadywanie.
+  - **Cloudflare Worker (pomysł usera) — OCENA:** reverse-proxy przez CF Workera zmienia IP wyjścia na CF. Pomaga
+    TYLKO gdy przyczyna jest IP-owa (blok/limit na IP Render). Jeśli przyczyna to wolumen/latencja — nie pomoże,
+    doda hop. Uwaga: encyklopedia może sama siedzieć za Cloudflare (challenge dla datacenter) — wtedy CF→CF bywa
+    inaczej traktowane, ale to do sprawdzenia empirycznie, nie z góry.
+  - **ALTERNATYWY (tańsze, bez nowej infry):** (1) ZMNIEJSZYĆ liczbę fetchy — `p-limit` na sąsiadów + krótszy
+    `MAX_HOPS`; (2) czytać najpierw WIERSZE bazy (Żniwa już materializują tomy cyklu jako wiersze `Cykl`) i pytać
+    wiki TYLKO o luki — realny podgląd często nie potrzemuje walka po encyklopedii; (3) throttle+jitter jak w
+    ścieżce Vinted; (4) TRWAŁY cache podglądu (przeżywający deploy) zamiast `BoundedCache` w RAM.
+    REKOMENDACJA: najpierw (verify realny błąd) → potem (2)/(1) jako pierwszy strzał; CF Worker dopiero gdy błąd
+    okaże się IP-owy.
+- **Katalog: klik w ikonę książki → podgląd szczegółów z Encyklopedii (NOWY feature, pomysł usera).** Ikona
+  `BookMarked` w `BookResultCard` (linia ~46) jest dziś CZYSTO DEKORACYJNA (brak `onClick`). Pomysł: klik otwiera
+  popover ze szczegółami książki, analogicznie do `CyclePanel`, przez nowy endpoint serwerowy pobierający stronę
+  wiki tej książki (1 fetch, nie ~34 — dużo lżejszy niż podgląd cyklu). ZALEŻNOŚĆ: dokłada ruch do tego samego
+  egressu co wyżej, więc sensownie robić PO rozstrzygnięciu kwestii pobierania z Encyklopedii. Reuse:
+  `WikiAdapter.fetchPageContent` + parser pól (autor/wydania/seria już parsowane w `wiki.parser`), wzorzec
+  popovera i `computePopoverPosition` z `CyclePanel`.
+
 - **Katalog: skaner kodów kreskowych (mobile) — feature ZREALIZOWANY (A+B), 3 PR-y.** Cel: LOOKUP
   („czy ta fizyczna książka to jedna z moich śledzonych nagrodowych?"), NIE dodawanie do bazy. Decyzje
   użytkownika: A+B, zgoda na Google Books (external), sprzęt=Android → natywny `BarcodeDetector` (bez nowej
