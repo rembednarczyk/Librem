@@ -1,7 +1,7 @@
 {
   "name": "librem",
   "private": true,
-  "version": "1.87.0",
+  "version": "1.87.1",
   "type": "module",
   "engines": {
     "node": ">=18 <21"
