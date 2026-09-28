@@ -108,4 +108,25 @@ describe("CycleLookupService.lookup", () => {
     await svc.lookup("T1", "");
     expect((wiki.fetchPageContent as any).mock.calls.length).toBe(calls); // no new fetches
   });
+
+  it("truncates a long chain at the default hop cap but covers it with a larger maxHops", async () => {
+    // A 20-volume linear chain anchored at Tom 1. Default cap (15) walks forward 15
+    // → Tom 1..Tom 16 (16). A larger cap covers the whole cycle.
+    const N = 20;
+    const pages: Record<string, string> = {};
+    for (let i = 1; i <= N; i++) {
+      const fields: Record<string, string> = { cykl: "Długa Saga" };
+      if (i > 1) fields.poprzednia = `Tom ${i - 1}`;
+      if (i < N) fields.następna = `Tom ${i + 1}`;
+      pages[`Tom ${i}`] = page(fields);
+    }
+    const svc = new CycleLookupService(makeNotion([]), makeWiki(pages));
+
+    const preview = await svc.lookup("Tom 1", "");            // default MAX_HOPS = 15
+    expect(preview!.volumes.length).toBe(16);                 // Tom 1 + 15 forward hops
+
+    const harvest = await svc.lookup("Tom 1", "", 40);        // full coverage
+    expect(harvest!.volumes.length).toBe(N);
+    expect(harvest!.volumes[N - 1].title).toBe("Tom 20");
+  });
 });

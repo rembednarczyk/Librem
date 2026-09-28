@@ -2,7 +2,7 @@ import pLimit from "p-limit";
 import { NotionAdapter } from "../notion.adapter";
 import { SyncEvent, NotionBook } from "../src/types";
 import { ConfigService } from "./configService";
-import { CycleLookupService, normTitle } from "./cycleLookupService";
+import { CycleLookupService, normTitle, HARVEST_MAX_HOPS } from "./cycleLookupService";
 import { buildCycleVolumeProperties, cycleLpLabel, buildCycleTitleProperty } from "./cycleRows";
 import { isCycleVolume } from "./bookCategory";
 import { encyclopediaUrl } from "../src/utils/encyclopedia";
@@ -68,7 +68,9 @@ export class CycleHarvestService {
         if (checkCancellation()) return;
         const anchorTitle = anchor.plTitle || anchor.origTitle;
         try {
-          const view = await this.cycleLookup.lookup(anchorTitle, anchor.author || "");
+          // Full coverage: walk far more of the chain than the preview, so a long cycle
+          // isn't truncated at MAX_HOPS and left with unmaterialized volumes (backlog residuum).
+          const view = await this.cycleLookup.lookup(anchorTitle, anchor.author || "", HARVEST_MAX_HOPS);
           if (!view || view.volumes.length <= 1) { noSiblingTitles.push(anchorTitle); return; }
 
           // Cycle name determined ONCE and sanitized — same as when creating the row,

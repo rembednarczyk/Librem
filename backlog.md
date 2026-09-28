@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.88.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.88.1** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 591 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 592 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,12 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.88.1** — **Pokrycie Żniw: większy zasięg walka dla materializacji (residuum MAX_HOPS).** `cycleLookup.lookup`
+  przyjmuje teraz `maxHops` (per-call): podgląd (Katalog) zostaje szybki na domyślnych 15, a Żniwa wołają
+  z `HARVEST_MAX_HOPS=40` → długi cykl nie jest obcinany na 15 i nie zostawia niezmaterializowanych tomów.
+  Klucz cache zawiera `maxHops` (podgląd i Żniwa nie kolidują). Named cause „urwanie MAX_HOPS" zamknięty;
+  „nieudany sąsiad" dalej łagodzony przez tomy z szablonu `{{Cykl}}` + retry. 1 nowy test (obcięcie na 15 vs
+  pełne pokrycie na 40). 592 testy.
 - **1.88.0** — **Velocity extras: streaki + data przeczytania na karcie/regale.** `computeStreaks` w
   `computeReadingStats`: `current` (kolejne lata czytania kończące się na „żywym" roku — bieżący lub poprzedni,
   inaczej 0) + `longest` (+`longestFrom/To`). Render w `ReadingPaceCard` (pasek „🔥 Seria N lat z rzędu · rekord
@@ -1692,8 +1698,10 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
   (`aggregateCycleRows`). **UC1 (dostępność brakujących tomów na Vinted) tym samym ZREALIZOWANE za darmo**:
   skoro tomy to wiersze z pustym `Źródło`, normalny skaner Vinted zbiera ich oferty, a karta pokazuje
   `acquireCost` + pill „🛒 X zł" per tom — bez osobnego skanu widm i bez blobów. Szczegóły: `docs/cycles-rows.md`.
-  Jedyne residuum (opcjonalne): tom z łańcucha wiki, którego Żniwa nie zmaterializowały (urwanie MAX_HOPS /
-  nieudany sąsiad) nie ma wiersza → brak dostępności; fix = poprawić POKRYCIE Żniw, nie osobny mechanizm.
+  Residuum (opcjonalne): tom z łańcucha wiki, którego Żniwa nie zmaterializowały. GŁÓWNY POWÓD („urwanie
+  MAX_HOPS") ✅ ZAŁATWIONY (1.88.1): Żniwa walkują z `HARVEST_MAX_HOPS=40` zamiast 15. Zostaje tylko skrajny
+  przypadek „nieudany sąsiad" (twardy błąd fetchu w środku łańcucha bez szablonu `{{Cykl}}`) — łagodzony przez
+  tomy z szablonu + retry; osobnego mechanizmu nie budujemy.
 
 ## Zrobione (skrót)
 
