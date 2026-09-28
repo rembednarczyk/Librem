@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.86.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.87.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -85,6 +85,10 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.87.0** — **Skan ISBN → okładka zeskanowanego wydania.** Po trafieniu skanu w Katalogu `SearchSection`
+  auto-otwiera `BookDetailPanel` z zeskanowanym `isbn` (kotwica = przycisk skanu), więc widać okładkę DOKŁADNIE
+  tego wydania w ręku, nie tylko najnowszego (badge „✓ zeskanowane wyd."). `useBookDetail`/`BookDetailPanel`
+  przyjmują `isbn` (URL + klucz cache). Domyka feature podglądu okładki end-to-end. 573 testy.
 - **1.86.0** — **Podgląd okładki + opisu książki w Katalogu (klik w ikonę `BookMarked`).** Nowy read-only
   `bookDetailService` + `GET /api/book-detail?title=&author=&isbn=`; popover `BookDetailPanel` (portal, wzorzec
   `CyclePanel`). Parser: `extractBookInfobox` (grafika/blurb) + `extractEditions` (tabela wydań: rok+okładka+ISBN
@@ -1503,9 +1507,10 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
   wydania o pasującym ISBN (normalizacja 10↔13 + myślniki przez `services/isbn`); zweryfikowane na Neuromancerze
   (skan 1996 → okładka 1996, skan 2025 → okładka 2025). Panel pokazuje rok wydania + licznik wydań.
   Lekki: max 2 wywołania wiki (strona + imageinfo), cache per (title|author|isbn).
-  **POZOSTAJE (follow-up): wpiąć ISBN→okładka w SKANER.** `ScanModal`/`SearchSection` po rozpoznaniu ISBN mogą
-  otworzyć `BookDetailPanel` z `?isbn=` zeskanowanego kodu → pokaże okładkę DOKŁADNIE tego wydania. Backend to
-  obsługuje; brakuje tylko wpięcia w wynik skanu. Osobna, wąska robota na powierzchni skanera.
+  **ISBN→okładka w SKANERZE — ZREALIZOWANE (1.87.0):** po trafieniu skanu (exact/resolved) `SearchSection`
+  auto-otwiera `BookDetailPanel` z zeskanowanym `isbn`, kotwiczony do przycisku skanu → pokazuje okładkę
+  DOKŁADNIE tego wydania (badge „✓ zeskanowane wyd."). Hook/panel przyjmują `isbn` (URL + klucz cache).
+  Feature domknięty end-to-end: skan fizycznej książki → okładka jej wydania.
 - **(historia pomysłu) Katalog: klik w ikonę książki → podgląd z Encyklopedii.** Reuse:
   `WikiAdapter.fetchPageContent` + parser pól (autor/wydania/seria już parsowane w `wiki.parser`), wzorzec
   popovera i `computePopoverPosition` z `CyclePanel`.

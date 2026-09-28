@@ -24,14 +24,15 @@ export function useBookDetail() {
   const [error, setError] = useState<string | null>(null);
   const cache = useRef<Map<string, BookDetail | null>>(new Map());
 
-  const fetchDetail = useCallback(async (title: string, author: string) => {
-    const key = `${title}|${author}`;
+  const fetchDetail = useCallback(async (title: string, author: string, isbn?: string) => {
+    const key = `${title}|${author}|${isbn || ""}`;
     setError(null);
     if (cache.current.has(key)) { setDetail(cache.current.get(key)!); return; }
     setLoading(true);
     setDetail(null);
     try {
-      const res = await fetch(`/api/book-detail?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author || "")}`);
+      const isbnParam = isbn ? `&isbn=${encodeURIComponent(isbn)}` : "";
+      const res = await fetch(`/api/book-detail?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author || "")}${isbnParam}`);
       if (res.status === 404) { cache.current.set(key, null); setDetail(null); setError("Nie znaleziono tej książki w Encyklopedii."); return; }
       if (!res.ok) { const j = await res.json().catch(() => null); throw new Error(j?.error || `Błąd serwera: ${res.status}`); }
       const data: BookDetail = await res.json();

@@ -19,15 +19,17 @@ interface Props {
   /** DB context shown in the header without a fetch. */
   year?: string | number | null;
   series?: string;
+  /** Scanned ISBN — the panel then shows that exact edition's cover, not the newest. */
+  isbn?: string;
   anchor: AnchorRect;
   onClose: () => void;
 }
 
-export const BookDetailPanel: React.FC<Props> = ({ title, author, year, series, anchor, onClose }) => {
+export const BookDetailPanel: React.FC<Props> = ({ title, author, year, series, isbn, anchor, onClose }) => {
   const { detail, loading, error, fetchDetail } = useBookDetail();
   const [imgFailed, setImgFailed] = useState(false);
 
-  useEffect(() => { fetchDetail(title, author); }, [title, author, fetchDetail]);
+  useEffect(() => { fetchDetail(title, author, isbn); }, [title, author, isbn, fetchDetail]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     const onShift = () => onClose();
@@ -118,6 +120,9 @@ export const BookDetailPanel: React.FC<Props> = ({ title, author, year, series, 
                   </div>
                   {editionCaption && (
                     <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider tabular-nums">{editionCaption}</span>
+                  )}
+                  {detail.coverSource === "isbn-match" && (
+                    <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wider">✓ zeskanowane wyd.</span>
                   )}
                 </div>
 
