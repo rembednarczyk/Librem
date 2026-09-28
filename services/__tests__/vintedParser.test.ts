@@ -32,6 +32,18 @@ describe("parseVintedItems", () => {
     expect(items).toHaveLength(5);
   });
 
+  it("rejects the author's OTHER book and surfaces title+author matches first", () => {
+    const html = catalogHtml({
+      items: { list: [
+        { id: 1, title: "Niezwyciężony Lem",        price: { amount: "9" }, url: "/items/1" }, // same author, WRONG title → drop
+        { id: 2, title: "Solaris (wyd. 2021)",       price: { amount: "8" }, url: "/items/2" }, // title only → weak
+        { id: 3, title: "Solaris Stanisław Lem",      price: { amount: "12" }, url: "/items/3" }, // title + author → strong
+      ] },
+    });
+    const items = parseVintedItems(html, "Solaris", "Stanisław Lem");
+    expect(items.map((i) => i.id)).toEqual([3, 2]); // wrong-title dropped; strong (3) before weak (2)
+  });
+
   it("does not leak the price object when amount is missing", () => {
     const html = catalogHtml({ items: { list: [{ id: 1, title: "Solaris", price: { amount: null, currency_code: "PLN" }, url: "/items/1" }] } });
     const items = parseVintedItems(html, "Solaris", "Lem");
