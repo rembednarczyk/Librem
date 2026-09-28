@@ -44,7 +44,9 @@ export function normTitle(t: string): string {
     .trim();
 }
 
-const MAX_HOPS = 15; // safety cap on walking the chain in each direction
+const MAX_HOPS = 15;         // default cap per direction — the on-demand PREVIEW (fast).
+export const HARVEST_MAX_HOPS = 40; // Żniwa want full COVERAGE, so they walk far more of
+                                    // the chain before MAX_HOPS truncates it (backlog residuum).
 
 /**
  * Cycle preview for a single book — ON DEMAND, without writing to Notion.
@@ -80,15 +82,16 @@ export class CycleLookupService {
     try { return await this.wiki.fetchPageContent(title); } catch { return ""; }
   }
 
-  async lookup(rawTitle: string, author: string): Promise<CycleView | null> {
-    const key = `${normTitle(rawTitle)}|${(author || "").toLowerCase().trim()}`;
+  /** `maxHops` (default = preview cap) — Żniwa pass a larger value for fuller coverage. */
+  async lookup(rawTitle: string, author: string, maxHops: number = MAX_HOPS): Promise<CycleView | null> {
+    const key = `${normTitle(rawTitle)}|${(author || "").toLowerCase().trim()}|${maxHops}`;
     if (this.cache.has(key)) return this.cache.get(key)!;
-    const result = await this.compute(rawTitle, author);
+    const result = await this.compute(rawTitle, author, maxHops);
     this.cache.set(key, result);
     return result;
   }
 
-  private async compute(rawTitle: string, author: string): Promise<CycleView | null> {
+  private async compute(rawTitle: string, author: string, maxHops: number): Promise<CycleView | null> {
     const wikitext = await this.resolvePage(rawTitle, author);
     if (!wikitext) return null;
     const info = WikiParser.extractCycleInfo(wikitext);
@@ -100,7 +103,7 @@ export class CycleLookupService {
     const visited = new Set<string>([normTitle(rawTitle)]);
 
     let cursor = info.prev;
-    for (let i = 0; i < MAX_HOPS && cursor; i++) {
+    for (let i = 0; i < maxHops && cursor; i++) {
       const n = normTitle(cursor);
       if (visited.has(n)) break;
       visited.add(n);
@@ -109,7 +112,7 @@ export class CycleLookupService {
       cursor = c ? WikiParser.extractCycleInfo(c).prev : null;
     }
     cursor = info.next;
-    for (let i = 0; i < MAX_HOPS && cursor; i++) {
+    for (let i = 0; i < maxHops && cursor; i++) {
       const n = normTitle(cursor);
       if (visited.has(n)) break;
       visited.add(n);
