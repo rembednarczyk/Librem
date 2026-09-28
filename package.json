@@ -1,7 +1,7 @@
 {
   "name": "librem",
   "private": true,
-  "version": "1.87.1",
+  "version": "1.87.2",
   "type": "module",
   "engines": {
     "node": ">=18 <21"
@@ -49,5 +49,8 @@
   },
   "optionalDependencies": {
     "playwright-core": "^1.62.1"
+  },
+  "overrides": {
+    "nanoid": "^3.3.18"
   }
 }

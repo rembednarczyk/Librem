@@ -38,6 +38,22 @@ export function createLogger(component: string): Logger {
   };
 }
 
+// Notion IDs (database / data source / page) — UUID-shaped or bare 32-hex.
+const NOTION_ID_RE = /\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\b|\b[0-9a-f]{32}\b/gi;
+
+/**
+ * Client-safe error text. Upstream (Notion SDK / adapter) messages can carry the
+ * database id (e.g. „…o ID: 254fda05-…"), so returning `error.message` verbatim to
+ * the browser leaks it (security sweep [8]). Redacts Notion-style ids to `[id]` and
+ * falls back to a generic message when there's nothing usable. The FULL message is
+ * still logged server-side — this only guards the HTTP response body.
+ */
+export function sanitizeErrorMessage(error: unknown, fallback: string): string {
+  const msg = (error as { message?: unknown })?.message;
+  if (typeof msg !== "string" || !msg.trim()) return fallback;
+  return msg.replace(NOTION_ID_RE, "[id]");
+}
+
 /**
  * Classifies an HTTP request error (axios/network) into an understandable category.
  * Used to tell an IP/Cloudflare block apart from a plain timeout or an
