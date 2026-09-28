@@ -127,6 +127,38 @@ export class WikiAdapter {
     }
   }
 
+  /**
+   * Resolves a bare image filename (e.g. „Neuromancer1.jpg", from the `|grafika=`
+   * infobox field) to its direct URL on the wiki, via `prop=imageinfo`. Returns ""
+   * when the file is missing. Used by the on-demand book-detail preview to point an
+   * `<img>` at the real cover — this wiki's `Special:FilePath` is misconfigured, so
+   * the API is the reliable path. Best-effort: a failure returns "" (no cover), it
+   * does NOT throw — a missing cover must not sink the whole preview.
+   */
+  async resolveImageUrl(filename: string): Promise<string> {
+    const name = (filename || "").trim();
+    if (!name) return "";
+    try {
+      const response = await withRetry(() => wikiAxios.get(this.baseUrl, {
+        params: {
+          action: "query",
+          titles: `Plik:${name}`,
+          prop: "imageinfo",
+          iiprop: "url",
+          format: "json",
+          formatversion: 2
+        }
+      }), 3, 2000);
+      const pages = response.data.query?.pages;
+      const page = Array.isArray(pages) ? pages[0] : pages?.[Object.keys(pages ?? {})[0]];
+      const url = page?.imageinfo?.[0]?.url;
+      return typeof url === "string" ? url : "";
+    } catch (error: any) {
+      log.warn(`Nie udało się rozwiązać URL okładki „${name}"`, { message: error?.message });
+      return "";
+    }
+  }
+
 
   /**
    * Fetches the content of multiple pages. Returns a content map plus a list of titles

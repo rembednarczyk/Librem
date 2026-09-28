@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
 import { BookMarked, Award, Tag } from "lucide-react";
 import { BookIndexEntry } from "../../types";
 import { HighlightedText } from "./HighlightedText";
 import { CycleTile } from "../CycleTile";
+import { BookDetailPanel } from "./BookDetailPanel";
+import { AnchorRect } from "../../utils/popoverPosition";
 
 /** Source tag color — consistent visual language with the rest of the app. */
 function zrodloTheme(tag: string): string {
@@ -32,6 +34,13 @@ export const BookResultCard: React.FC<Props> = ({ book, query }) => {
   const primaryTitle = book.plTitle?.trim() ? book.plTitle : book.origTitle;
   const showOrig = book.origTitle && book.origTitle.trim() && book.origTitle !== primaryTitle;
 
+  // Book-detail popover (cover + blurb from the encyclopedia), opened from the icon.
+  const [detailAnchor, setDetailAnchor] = useState<AnchorRect | null>(null);
+  const openDetail = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setDetailAnchor({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width });
+  };
+
   return (
     <motion.div
       layout
@@ -41,10 +50,26 @@ export const BookResultCard: React.FC<Props> = ({ book, query }) => {
       transition={{ duration: 0.18 }}
       className="glass-card rounded-3xl p-5 border-cyan-500/10 hover:border-cyan-500/25 transition-colors group"
     >
+      {detailAnchor && (
+        <BookDetailPanel
+          title={primaryTitle}
+          author={book.author || ""}
+          year={book.year}
+          series={book.series}
+          anchor={detailAnchor}
+          onClose={() => setDetailAnchor(null)}
+        />
+      )}
       <div className="flex items-start gap-3">
-        <div className="shrink-0 mt-0.5 p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/15 text-cyan-400/80 group-hover:text-cyan-300 transition-colors">
+        <button
+          type="button"
+          onClick={openDetail}
+          className="shrink-0 mt-0.5 p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/15 text-cyan-400/80 hover:bg-cyan-500/20 hover:text-cyan-200 hover:border-cyan-400/40 transition-colors cursor-pointer"
+          title="Pokaż okładkę i opis z Encyklopedii"
+          aria-label={`Pokaż szczegóły „${primaryTitle}"`}
+        >
           <BookMarked className="w-4 h-4" />
-        </div>
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <HighlightedText

@@ -33,8 +33,10 @@ const CSP = [
   // Tailwind + motion/react set element styles; fonts come from Google Fonts.
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  // data: covers the inline SVG favicon; the Vinted hosts serve offer thumbnails.
-  "img-src 'self' data: https://*.vinted.net https://*.vinted.pl",
+  // data: covers the inline SVG favicon; Vinted hosts serve offer thumbnails; the
+  // encyclopedia serves book covers loaded directly in the viewer's browser (a
+  // residential IP — not subject to the datacenter block on the server side).
+  "img-src 'self' data: https://*.vinted.net https://*.vinted.pl https://encyklopediafantastyki.pl",
   "connect-src 'self'",
 ].join("; ");
 

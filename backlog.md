@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.85.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.86.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 566 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 573 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,13 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.86.0** — **Podgląd okładki + opisu książki w Katalogu (klik w ikonę `BookMarked`).** Nowy read-only
+  `bookDetailService` + `GET /api/book-detail?title=&author=&isbn=`; popover `BookDetailPanel` (portal, wzorzec
+  `CyclePanel`). Parser: `extractBookInfobox` (grafika/blurb) + `extractEditions` (tabela wydań: rok+okładka+ISBN
+  per wydanie). `WikiAdapter.resolveImageUrl` (imageinfo → URL okładki). CSP `img-src` dopuszcza obrazy
+  encyklopedii (ładuje przeglądarka usera). DOMYŚLNIE pokazuje NAJNOWSZĄ okładkę (max rok z tabeli wydań), a `?isbn=`
+  dopasowuje okładkę konkretnego wydania (normalizacja 10↔13). Zweryfikowane empirycznie na realnych danych.
+  7 nowych testów parsera. 573 testy. Follow-up: wpiąć ISBN→okładka w skaner.
 - **1.85.0** — **`WIKI_HTTP_PROXY` — wsparcie klasycznego proxy (tunel CONNECT) w `WikiAdapter`.** Po
   potwierdzeniu, że blok IP wywala też book sync/diagnostykę (nie tylko podgląd cyklu) i że CF egress jest
   zablokowany, dołożone wsparcie dla proxy rezydencjalnego. `buildWikiHttpsAgent(env)` (export): gdy
@@ -1484,11 +1491,22 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
     martwy (identyczne wywołania `api.php`). User dawno nie synchronizował — warto odpalić małą synchronizację i
     sprawdzić, czy nie leci 403. Jeśli tak → proxy staje się nie „nice-to-have dla cyklu", tylko WARUNKIEM działania
     core'owego syncu.
-- **Katalog: klik w ikonę książki → podgląd szczegółów z Encyklopedii (NOWY feature, pomysł usera).** Ikona
-  `BookMarked` w `BookResultCard` (linia ~46) jest dziś CZYSTO DEKORACYJNA (brak `onClick`). Pomysł: klik otwiera
-  popover ze szczegółami książki, analogicznie do `CyclePanel`, przez nowy endpoint serwerowy pobierający stronę
-  wiki tej książki (1 fetch, nie ~34 — dużo lżejszy niż podgląd cyklu). ZALEŻNOŚĆ: dokłada ruch do tego samego
-  egressu co wyżej, więc sensownie robić PO rozstrzygnięciu kwestii pobierania z Encyklopedii. Reuse:
+- **Katalog: klik w ikonę książki → podgląd okładki + opisu z Encyklopedii — ZREALIZOWANE (1.86.0).** Ikona
+  `BookMarked` w `BookResultCard` otwiera `BookDetailPanel` (popover przez portal, wzorzec `CyclePanel`).
+  Backend: `services/bookDetailService.ts` (read-only, `BoundedCache`) → `GET /api/book-detail?title=&author=&isbn=`
+  → getter `syncManager.getBookDetail`. Parser: `WikiParser.extractBookInfobox` (grafika/blurb/pola) +
+  `WikiParser.extractEditions` (tabela wydań: rok+okładka+ISBN per wydanie). `WikiAdapter.resolveImageUrl`
+  (imageinfo → realny URL okładki; `Special:FilePath` na tym wiki nie działa). CSP: dopuszczony `img-src`
+  z `encyklopediafantastyki.pl` (obraz ładuje przeglądarka usera — IP rezydencjalne, nie objęte blokadą).
+  **TODO 2 (najnowsza okładka) — ZROBIONE:** domyślnie pokazujemy okładkę NAJNOWSZEGO wydania z tabeli
+  (max rok), fallback do `|grafika|`. **TODO 1 (match po ISBN) — BACKEND GOTOWY:** `?isbn=` wybiera okładkę
+  wydania o pasującym ISBN (normalizacja 10↔13 + myślniki przez `services/isbn`); zweryfikowane na Neuromancerze
+  (skan 1996 → okładka 1996, skan 2025 → okładka 2025). Panel pokazuje rok wydania + licznik wydań.
+  Lekki: max 2 wywołania wiki (strona + imageinfo), cache per (title|author|isbn).
+  **POZOSTAJE (follow-up): wpiąć ISBN→okładka w SKANER.** `ScanModal`/`SearchSection` po rozpoznaniu ISBN mogą
+  otworzyć `BookDetailPanel` z `?isbn=` zeskanowanego kodu → pokaże okładkę DOKŁADNIE tego wydania. Backend to
+  obsługuje; brakuje tylko wpięcia w wynik skanu. Osobna, wąska robota na powierzchni skanera.
+- **(historia pomysłu) Katalog: klik w ikonę książki → podgląd z Encyklopedii.** Reuse:
   `WikiAdapter.fetchPageContent` + parser pól (autor/wydania/seria już parsowane w `wiki.parser`), wzorzec
   popovera i `computePopoverPosition` z `CyclePanel`.
 

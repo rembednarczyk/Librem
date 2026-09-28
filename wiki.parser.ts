@@ -274,4 +274,111 @@ export class WikiParser {
     return { cycleName, prev: prev || null, next: next || null, templateVolumes };
   }
 
+  /**
+   * Extracts the fields a book-detail preview shows from the `{{Książka}}` infobox
+   * plus the free-text blurb that follows it: the cover-image filename (`|grafika=`),
+   * a few edition fields, and the description paragraph (text between the infobox and
+   * the next template, cleaned of wiki markup and capped). Read-only — no DB writes.
+   * `coverFile` is a bare filename (e.g. „Neuromancer1.jpg"); the caller resolves it
+   * to a URL via `WikiAdapter.resolveImageUrl`.
+   */
+  static extractBookInfobox(wikitext: string): {
+    coverFile: string; description: string; translator: string; publisher: string; coverArtist: string; firstPolish: string;
+  } {
+    const empty = { coverFile: "", description: "", translator: "", publisher: "", coverArtist: "", firstPolish: "" };
+    if (!wikitext) return empty;
+
+    // Isolate the {{Książka …}} infobox. Fields may hold inline {{…}}/[[…]], but the
+    // block closes with a „}}" on its own line — match lazily up to that, so nested
+    // inline „}}" don't cut it short.
+    const boxMatch = wikitext.match(/\{\{\s*Książka\b[\s\S]*?\n\}\}/);
+    const box = boxMatch ? boxMatch[0] : "";
+
+    // One infobox parameter (whole [[…]]/{{…}} as a token, cut at the next „|").
+    const field = (name: string): string => {
+      const re = new RegExp(`\\|\\s*${name}\\s*=\\s*((?:\\[\\[[^\\]]*\\]\\]|\\{\\{[^{}]*\\}\\}|[^\\n|])+)`, "i");
+      const m = box.match(re);
+      return m ? this.cleanWikitext(m[1]) : "";
+    };
+
+    const coverFile = field("grafika");
+    const translator = field("tłumacz") || field("tlumacz");
+    const publisher = field("wydawca");
+    const coverArtist = field("autor okladki") || field("autor okładki");
+    const firstPolish = field("data I wyd pol");
+
+    // Blurb: text AFTER the infobox, up to the next template ({{tabela wydania}} etc.).
+    let description = "";
+    if (boxMatch) {
+      const after = wikitext.slice(boxMatch.index! + box.length);
+      const stop = after.search(/\{\{/);
+      description = this.cleanWikitext(stop >= 0 ? after.slice(0, stop) : after);
+      if (description.length > 600) description = description.slice(0, 600).replace(/\s+\S*$/, "") + "…";
+    }
+
+    return { coverFile, description, translator, publisher, coverArtist, firstPolish };
+  }
+
+  /**
+   * Parses the `{{tabela wydania}}` editions table into one row per edition. Each row
+   * carries the year, the cover-image filename (`okladkaN`) and — from the nested
+   * `{{infowydanie|…}}` — the ISBN, publisher and cover artist. This is what lets the
+   * preview default to the NEWEST cover and match a scanned ISBN to a specific
+   * edition's cover. Returns [] when there's no editions table.
+   */
+  static extractEditions(wikitext: string): BookEdition[] {
+    const box = (wikitext.match(/\{\{\s*tabela wydania\b[\s\S]*?\n\}\}/) || [])[0] || "";
+    if (!box) return [];
+
+    // One `|<name>= value` on its own line (values here are single-line).
+    const lineField = (name: string): string => {
+      const m = box.match(new RegExp(`^\\|\\s*${name}\\s*=\\s*(.*?)\\s*$`, "m"));
+      return m ? m[1] : "";
+    };
+    // Largest 4-digit year in a label like „2008, 2009" (dodruki) → the latest.
+    const latestYear = (label: string): number | null => {
+      const years = (label.match(/\b(19|20)\d{2}\b/g) || []).map(Number);
+      return years.length ? Math.max(...years) : null;
+    };
+    const infoField = (info: string, name: string): string => {
+      const m = info.match(new RegExp(`\\|\\s*${name.replace(".", "\\.")}\\s*=\\s*([^|}]*)`, "i"));
+      return m ? this.cleanWikitext(m[1]) : "";
+    };
+
+    const editions: BookEdition[] = [];
+    for (let n = 1; n <= 40; n++) {
+      const rok = lineField(`rok${n}`);
+      const cover = lineField(`okladka${n}`) || lineField(`okładka${n}`);
+      const info = lineField(`informacja${n}`);
+      const translator = lineField(`przekład${n}`) || lineField(`przeklad${n}`);
+      // Skip an empty index rather than stopping — tolerate a gap left by a deleted
+      // middle edition (editors don't always renumber). Bounded to 40 either way.
+      if (!rok && !cover && !info) continue;
+      editions.push({
+        year: latestYear(rok),
+        yearLabel: rok,
+        coverFile: this.cleanWikitext(cover),
+        isbn: infoField(info, "isbn"),
+        publisher: infoField(info, "wydawca"),
+        coverArtist: infoField(info, "proj.okladki"),
+        translator,
+      });
+    }
+    return editions;
+  }
+
+}
+
+export interface BookEdition {
+  /** Latest 4-digit year in the label (dodruki collapse to the newest), or null. */
+  year: number | null;
+  /** Raw year label (e.g. „2008, 2009"). */
+  yearLabel: string;
+  /** Cover-image filename for THIS edition, or "". */
+  coverFile: string;
+  /** ISBN as printed (may carry hyphens) — normalize before comparing. */
+  isbn: string;
+  publisher: string;
+  coverArtist: string;
+  translator: string;
 }

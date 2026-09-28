@@ -354,6 +354,21 @@ export const getCycle = async (req: Request, res: Response) => {
   }
 };
 
+export const getBookDetail = async (req: Request, res: Response) => {
+  const title = typeof req.query.title === "string" ? req.query.title.trim() : "";
+  const author = typeof req.query.author === "string" ? req.query.author.trim() : "";
+  const isbn = typeof req.query.isbn === "string" ? req.query.isbn.trim() : "";
+  if (!title) return res.status(400).json({ error: "Brak parametru title." });
+  try {
+    const detail = await syncManager.getBookDetail(title, author, isbn || undefined);
+    if (!detail) return res.status(404).json({ error: "Nie znaleziono szczegółów tej książki w Encyklopedii." });
+    res.json(detail);
+  } catch (error: any) {
+    log.error("Book detail error", { title, message: error?.message });
+    res.status(500).json({ error: error.message || "Błąd podglądu szczegółów książki." });
+  }
+};
+
 export const getIsbn = async (req: Request, res: Response) => {
   const code = typeof req.params.code === "string" ? req.params.code : "";
   const isbn = normalizeIsbn(code);
