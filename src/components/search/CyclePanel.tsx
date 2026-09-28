@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { Layers, X, Loader2, Check, Package, Award, CircleDashed, MapPin, AlertTriangle, ExternalLink } from "lucide-react";
 import { useCycle } from "../../hooks/useCycle";
+import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
 import { encyclopediaUrl } from "../../utils/encyclopedia";
 import { computePopoverPosition, AnchorRect } from "../../utils/popoverPosition";
 
@@ -31,21 +32,11 @@ interface Props {
 
 export const CyclePanel: React.FC<Props> = ({ title, author, anchor, onClose }) => {
   const { view, loading, error, fetchCycle } = useCycle();
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchCycle(title, author); }, [title, author, fetchCycle]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    // Scroll/resize invalidates the anchor — simplest to just close the popover.
-    const onShift = () => onClose();
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onShift);
-    window.addEventListener("scroll", onShift, true);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", onShift);
-      window.removeEventListener("scroll", onShift, true);
-    };
-  }, [onClose]);
+  // Esc / outside-scroll / resize close; scrolling the content keeps it open.
+  usePopoverDismiss(panelRef, onClose);
 
   const pos = useMemo(
     () => computePopoverPosition(anchor, { width: window.innerWidth, height: window.innerHeight }),
@@ -57,6 +48,7 @@ export const CyclePanel: React.FC<Props> = ({ title, author, anchor, onClose }) 
       {/* Transparent catcher for clicks outside the popover (tooltip feel — no dimming). */}
       <div className="fixed inset-0 z-[99]" onClick={onClose} aria-hidden="true" />
       <motion.div
+        ref={panelRef}
         role="dialog"
         aria-label={`Cykl: ${view?.cycleName || title}`}
         initial={{ opacity: 0, scale: 0.98, y: pos.placement === "below" ? -4 : 4 }}
@@ -83,7 +75,7 @@ export const CyclePanel: React.FC<Props> = ({ title, author, anchor, onClose }) 
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar p-3 space-y-2">
           {loading && (
             <div className="flex items-center justify-center gap-2.5 py-8 text-slate-400">
               <Loader2 className="w-4 h-4 animate-spin text-amber-400" />

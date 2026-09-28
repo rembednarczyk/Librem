@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { BookMarked, X, Loader2, ExternalLink, ImageOff } from "lucide-react";
 import { useBookDetail } from "../../hooks/useBookDetail";
+import { usePopoverDismiss } from "../../hooks/usePopoverDismiss";
 import { encyclopediaUrl } from "../../utils/encyclopedia";
 import { computePopoverPosition, AnchorRect } from "../../utils/popoverPosition";
 
@@ -28,20 +29,11 @@ interface Props {
 export const BookDetailPanel: React.FC<Props> = ({ title, author, year, series, isbn, anchor, onClose }) => {
   const { detail, loading, error, fetchDetail } = useBookDetail();
   const [imgFailed, setImgFailed] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchDetail(title, author, isbn); }, [title, author, isbn, fetchDetail]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    const onShift = () => onClose();
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onShift);
-    window.addEventListener("scroll", onShift, true);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", onShift);
-      window.removeEventListener("scroll", onShift, true);
-    };
-  }, [onClose]);
+  // Esc / outside-scroll / resize close; scrolling the content keeps it open.
+  usePopoverDismiss(panelRef, onClose);
 
   const pos = useMemo(
     () => computePopoverPosition(anchor, { width: window.innerWidth, height: window.innerHeight }),
@@ -62,6 +54,7 @@ export const BookDetailPanel: React.FC<Props> = ({ title, author, year, series, 
     <>
       <div className="fixed inset-0 z-[99]" onClick={onClose} aria-hidden="true" />
       <motion.div
+        ref={panelRef}
         role="dialog"
         aria-label={`Szczegóły: ${title}`}
         initial={{ opacity: 0, scale: 0.98, y: pos.placement === "below" ? -4 : 4 }}
@@ -88,7 +81,7 @@ export const BookDetailPanel: React.FC<Props> = ({ title, author, year, series, 
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3.5">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar p-3.5">
           {loading && (
             <div className="flex items-center justify-center gap-2.5 py-8 text-slate-400">
               <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />

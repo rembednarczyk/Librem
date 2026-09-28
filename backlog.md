@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.87.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.87.1** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 573 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 578 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,13 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.87.1** — **Popovery przewijalne (fix) + ujednolicenie zamykania.** `CyclePanel`/`BookDetailPanel`
+  zamykały się na KAŻDY scroll (listener capture na window), więc nie dało się przewinąć ich treści mimo
+  `overflow-y-auto` — szczególnie na tapie. Nowy wspólny hook `usePopoverDismiss(ref, onClose)`: Esc + resize +
+  scroll NA ZEWNĄTRZ zamykają (kotwica `position:fixed` się dezaktualizuje), ale scroll WEWNĄTRZ popovera
+  przewija treść (rozróżnienie przez `el.contains(e.target)` w fazie capture). Dodane `overscroll-contain`
+  (brak scroll-chaining na mobile). Oba popovery używają teraz jednego hooka → spójne zachowanie. 5 nowych
+  testów hooka. 578 testów.
 - **1.87.0** — **Skan ISBN → okładka zeskanowanego wydania.** Po trafieniu skanu w Katalogu `SearchSection`
   auto-otwiera `BookDetailPanel` z zeskanowanym `isbn` (kotwica = przycisk skanu), więc widać okładkę DOKŁADNIE
   tego wydania w ręku, nie tylko najnowszego (badge „✓ zeskanowane wyd."). `useBookDetail`/`BookDetailPanel`
