@@ -1,6 +1,6 @@
 {
   "name": "Librem",
-  "version": "1.87.2",
+  "version": "1.88.0",
   "description": "A full-stack application that syncs book awards from Encyklopedia Fantastyki (MediaWiki API) to a Notion database.",
   "requestFramePermissions": []
 }

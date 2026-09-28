@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "motion/react";
-import { Gauge, Crown, ArrowUp, ArrowDown, Minus } from "lucide-react";
+import { Gauge, Crown, ArrowUp, ArrowDown, Minus, Flame } from "lucide-react";
 import { ReadingStats } from "../../hooks/useStats";
 
 /**
@@ -11,7 +11,7 @@ import { ReadingStats } from "../../hooks/useStats";
  * bar height = books read that year, current year and record year highlighted.
  */
 export const ReadingPaceCard: React.FC<{ reading: ReadingStats }> = ({ reading }) => {
-  const { perYear, thisYear, lastYear, bestYear, recentPace, totalRead, totalDated } = reading;
+  const { perYear, thisYear, lastYear, bestYear, recentPace, totalRead, totalDated, streaks } = reading;
   const max = Math.max(1, ...perYear.map((y) => y.count));
   const currentYear = new Date().getFullYear();
   const delta = thisYear - lastYear;
@@ -65,6 +65,20 @@ export const ReadingPaceCard: React.FC<{ reading: ReadingStats }> = ({ reading }
               <div className="text-[9px] uppercase tracking-widest text-slate-500 font-bold mt-1">Z datą łącznie</div>
             </div>
           </div>
+
+          {/* Reading streaks — consecutive read-years. Only when there's a real run. */}
+          {streaks.longest >= 2 && (
+            <div className="flex items-center justify-center gap-x-5 gap-y-1.5 flex-wrap text-[11px] font-bold">
+              {streaks.current >= 2 && (
+                <span className="flex items-center gap-1.5 text-orange-300">
+                  <Flame className="w-3.5 h-3.5" /> Seria {streaks.current} {streaks.current === 1 ? "rok" : streaks.current < 5 ? "lata" : "lat"} z rzędu
+                </span>
+              )}
+              <span className="flex items-center gap-1.5 text-slate-400 uppercase tracking-widest">
+                Rekord serii: <span className="text-slate-200 tabular-nums normal-case tracking-normal">{streaks.longest} lat ({streaks.longestFrom}–{streaks.longestTo})</span>
+              </span>
+            </div>
+          )}
 
           {/* Yearly histogram — bar = books read that year */}
           <div className="flex items-end gap-1 h-[140px] pt-2">

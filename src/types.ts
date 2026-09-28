@@ -85,6 +85,8 @@ export interface BookIndexEntry {
   partOfCycle: boolean;
   /** Manual shelf ordering key (precise drag&drop); absent → sort by year. */
   shelfOrder?: number;
+  /** „Data przeczytania" ISO („YYYY-MM-DD") — surfaced on the card/shelf; Jan-1 = year-only. */
+  dataPrzeczytania?: string;
   /** Canonical ISBN-13s across editions (if enriched) — a barcode of ANY edition matches this row. */
   isbns?: string[];
   /** Space-joined ISBN forms for text search: each ISBN-13 plus its ISBN-10 equivalent (old, pre-2007). */

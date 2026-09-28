@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.87.2** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.88.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 583 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 591 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,13 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.88.0** — **Velocity extras: streaki + data przeczytania na karcie/regale.** `computeStreaks` w
+  `computeReadingStats`: `current` (kolejne lata czytania kończące się na „żywym" roku — bieżący lub poprzedni,
+  inaczej 0) + `longest` (+`longestFrom/To`). Render w `ReadingPaceCard` (pasek „🔥 Seria N lat z rzędu · rekord
+  serii …", tylko gdy `longest>=2`). Data przeczytania dołożona do `BookIndexEntry` + `toSearchIndex`; nowy util
+  `formatReadDate` (Jan-1 = rok-only → sam rok; inaczej `DD.MM.YYYY`). Surfacing: widoczna linia „✓ Przeczytano
+  <data>" na karcie Katalogu (`BookResultCard`) + w tooltipach grzbietu (`BookSpine`) i okładki (`CoverCard`) na
+  regale. 8 nowych testów (streaki + formatReadDate). 591 testów.
 - **1.87.2** — **Reszta security-sweep [8] + fix latentnego typu.** (a) Ciasteczka Vinted scope'owane do hosta
   (`browserPrime` → `context.cookies(VINTED_HOME)`, obce cookies nie jadą w nagłówku). (b) `sanitizeErrorMessage`
   (`logger.ts`) redaguje Notion-ID (UUID/32-hex → `[id]`) w odpowiedziach HTTP — 16 zwrotów `syncController`
@@ -1595,7 +1602,7 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
   `computeReadingStats` (przeczytane award-booki wg ROKU) i karta „Tempo czytania" na statystykach (KPI w tym roku
   + delta, tempo książek/rok, histogram roczny). Granularność ROCZNA (daty rok-only = 1 stycznia, więc bez
   rozbicia miesięcznego). **OPCJONALNIE później**: prognoza domknięcia kolekcji (recentPace + brakujące
-  award-booki), streaki, surfacing daty przeczytania na karcie książki/regale.
+  award-booki) — DALEJ OTWARTE. Streaki + surfacing daty przeczytania na karcie/regale — ✅ ZROBIONE (1.88.0).
 - **Import dat przeczytania z CSV — feature w aplikacji (przyszłość).** Jednorazowy import zrobiony skryptem
   `scripts/importReadDates.ts` (RD-PR2, 1.70.0) na bazie czystych helperów `services/readDateImport.ts`
   (`parseReadDate`/`parseImportCsv`/`buildReadDatePlan`). DO ZROBIENIA kiedyś: opakować to w UI (upload CSV w
