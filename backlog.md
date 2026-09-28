@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.88.1** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.89.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 592 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 603 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,18 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.89.0** — **Skaner Vinted: precyzyjne dopasowanie ofert (mniej „ślepych strzałów").** Stary warunek
+  `offer.includes(title) || title.includes(offer) || offer.includes(author)` był za luźny — akceptował na
+  SAM AUTOR (inna książka tego autora), na PODCIĄG (`title.includes(offer)`: „Słońce" trafiało w „Czarne
+  słońce") i ignorował granice słów („sun" w „sunday"). Nowy `services/vintedMatch.ts` (`matchOfferToBook`):
+  nazwa oferty musi zawierać CAŁY tytuł jako kolejne CAŁE słowa (fold diakrytyków — Vinted gubi „ł/ś/ą",
+  spłaszczona interpunkcja, granice słów przez padding spacją). Autor = KOROBORACJA: title+author → `strong`
+  (surfaces first), ale **sam autor już nie akceptuje**. Tytuł-only dalej akceptowany (częsty przypadek —
+  aukcja bez autora w nazwie), ale rankowany niżej. Parser zbiera z 4 ścieżek do capa 24, sortuje strong-first
+  (stabilnie → cena rosnąco zachowana w grupie), tnie do 5. `fold` wyciągnięty do `src/utils/fold.ts` (shared
+  FE/BE). OGRANICZENIE (świadome): dwie RÓŻNE książki o IDENTYCZNYM tytule bez autora w nazwie dalej mogą
+  wejść jako weak — nieodróżnialne z samej nazwy aukcji; ale poprawna (z autorem) jest strong i surfaces first.
+  11 nowych testów (matcher + integracja parsera). 603 testy.
 - **1.88.1** — **Pokrycie Żniw: większy zasięg walka dla materializacji (residuum MAX_HOPS).** `cycleLookup.lookup`
   przyjmuje teraz `maxHops` (per-call): podgląd (Katalog) zostaje szybki na domyślnych 15, a Żniwa wołają
   z `HARVEST_MAX_HOPS=40` → długi cykl nie jest obcinany na 15 i nie zostawia niezmaterializowanych tomów.

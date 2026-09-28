@@ -1,4 +1,5 @@
 import { createLogger } from "../logger";
+import { matchOfferToBook } from "./vintedMatch";
 
 const log = createLogger("VintedParse");
 
@@ -123,8 +124,20 @@ export function vintedDiagnostics(html: string, parsed: number): VintedDebug {
 }
 
 export function parseVintedItems(html: string, title: string, author: string): VintedItem[] {
-  const items: VintedItem[] = [];
   let rawItems: any[] = [];
+
+  // Collect matches from every path, then rank strong (title+author) first and keep 5.
+  // Gathering more than 5 first means a confident match isn't dropped just for sitting
+  // past the cap in Vinted's (price) order.
+  const collected: { item: VintedItem; strong: boolean }[] = [];
+  const COLLECT_CAP = 24;
+  const tryCollect = (offerTitle: string, build: () => VintedItem): boolean => {
+    if (collected.length >= COLLECT_CAP) return false;
+    const m = matchOfferToBook(offerTitle, title, author);
+    if (!m.accept) return false;
+    collected.push({ item: build(), strong: m.strong });
+    return true;
+  };
 
   // 1. JSON blob in the data-props attribute / Catalog script content
   const catalogMatch = html.match(/data-component-name="Catalog"[^>]*data-props="([^"]+)"/s) ||
@@ -181,30 +194,21 @@ export function parseVintedItems(html: string, title: string, author: string): V
 
   if (Array.isArray(rawItems)) {
     for (const item of rawItems) {
-      if (items.length >= 5) break;
-
-      const itemTitle = (item.title || "").toLowerCase();
-      const searchTitle = title.toLowerCase();
-      const searchAuthor = (author || "").toLowerCase();
-
-      // Flexible matching: the offer title contains the book title (or vice versa),
-      // or the offer title contains the author's name.
-      const hasTitle = itemTitle.includes(searchTitle) || searchTitle.includes(itemTitle);
-      const hasAuthor = searchAuthor && itemTitle.includes(searchAuthor);
-
-      if (hasTitle || hasAuthor) {
+      if (collected.length >= COLLECT_CAP) break;
+      const offerTitle = item.title || "";
+      tryCollect(offerTitle, () => {
         const rawPrice = item.price?.amount || item.total_item_price?.amount || item.price?.amount_decimal || "??";
         const photo = item.photo?.url || item.photo?.thumbnails?.[0]?.url || item.photos?.[0]?.url || null;
-        items.push({
+        return {
           id: item.id,
-          title: item.title || itemTitle,
+          title: item.title || offerTitle,
           price: rawPrice,
           priceValue: parseVintedPrice(rawPrice),
           currency: item.price?.currency_code || item.currency || "PLN",
           url: item.url ? (item.url.startsWith('http') ? item.url : `https://www.vinted.pl${item.url}`) : `https://www.vinted.pl/items/${item.id}`,
           photo
-        });
-      }
+        };
+      });
     }
   }
 
@@ -212,12 +216,10 @@ export function parseVintedItems(html: string, title: string, author: string): V
   // We split on `feed-grid__item"` — catches the old `class="feed-grid__item"` and the new
   // `class="Grid-module-scss-module__…__feed-grid__item"`. From each tile we take
   // the URL, title, structured price and thumbnail (`images1.vinted.net`).
-  if (items.length === 0) {
+  if (collected.length === 0) {
     const itemBlocks = html.split(FEED_GRID_RE);
     if (itemBlocks.length > 1) {
-      const searchTitle = title.toLowerCase();
-      const searchAuthor = (author || "").toLowerCase();
-      for (let j = 1; j < itemBlocks.length && items.length < 5; j++) {
+      for (let j = 1; j < itemBlocks.length && collected.length < COLLECT_CAP; j++) {
         const block = itemBlocks[j];
         // URL without query (`?referrer=catalog`) — consistent with the canonical offer link.
         const urlMatch = block.match(/href="(\/items\/[^"?]+)/);
@@ -230,39 +232,41 @@ export function parseVintedItems(html: string, title: string, author: string): V
 
         if (urlMatch && titleMatch) {
           const itemTitle = titleMatch[1];
-          const lower = itemTitle.toLowerCase();
-          const hasTitle = lower.includes(searchTitle) || searchTitle.includes(lower);
-          const hasAuthor = !!searchAuthor && lower.includes(searchAuthor);
-          if (hasTitle || hasAuthor) {
+          tryCollect(itemTitle, () => {
             const rawPrice = priceMatch ? priceMatch[1] : "Sprawdź";
             // detach: all these fields are substrings of the 7 MB HTML — without a copy they pin the parent.
-            items.push({
+            return {
               title: detach(itemTitle),
               url: detach(`https://www.vinted.pl${urlMatch[1]}`),
               price: detach(rawPrice),
               priceValue: parseVintedPrice(rawPrice),
               currency: priceMatch ? detach(priceMatch[2]) : "PLN",
               photo: photoMatch ? detach(photoMatch[1]) : null
-            });
-          }
+            };
+          });
         }
       }
     }
   }
 
   // 4. Last resort: a simple global regex
-  if (items.length === 0) {
+  if (collected.length === 0) {
     const itemRegex = /href="(\/items\/[^"]+)"[^>]*title="([^"]+)"/g;
     let match;
-    while ((match = itemRegex.exec(html)) !== null && items.length < 5) {
+    while ((match = itemRegex.exec(html)) !== null && collected.length < COLLECT_CAP) {
       const itemUrl = `https://www.vinted.pl${match[1]}`;
       const itemTitle = match[2];
-      if (itemTitle.toLowerCase().includes(title.toLowerCase())) {
-        // detach: itemTitle/itemUrl are substrings of the HTML — without a copy they pin the 7 MB parent.
-        items.push({ title: detach(itemTitle), url: detach(itemUrl), price: "Sprawdź", priceValue: null, currency: "PLN" });
-      }
+      // detach: itemTitle/itemUrl are substrings of the HTML — without a copy they pin the 7 MB parent.
+      tryCollect(itemTitle, () => ({ title: detach(itemTitle), url: detach(itemUrl), price: "Sprawdź", priceValue: null, currency: "PLN" }));
     }
   }
+
+  // Rank strong (title+author) matches first, keep the top 5. Array.sort is stable, so
+  // within each group Vinted's original (price ascending) order is preserved.
+  const items = [...collected]
+    .sort((a, b) => (a.strong === b.strong ? 0 : a.strong ? -1 : 1))
+    .slice(0, 5)
+    .map((c) => c.item);
 
   // Last-ditch fallback for price: the HTML paths catch the listing's title attribute,
   // which Vinted builds as „Tytuł, Marka, Stan: …, {cena} zł, {cena z ochroną} zł".
