@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { BookMarked, Award, Tag } from "lucide-react";
+import { BookMarked, Award, Tag, CheckCircle2 } from "lucide-react";
 import { BookIndexEntry } from "../../types";
+import { formatReadDate } from "../../utils/readDate";
 import { HighlightedText } from "./HighlightedText";
 import { CycleTile } from "../CycleTile";
 import { BookDetailPanel } from "./BookDetailPanel";
@@ -33,6 +34,7 @@ export const BookResultCard: React.FC<Props> = ({ book, query }) => {
   // Primary title = Polish, and when missing — the original (untranslated books).
   const primaryTitle = book.plTitle?.trim() ? book.plTitle : book.origTitle;
   const showOrig = book.origTitle && book.origTitle.trim() && book.origTitle !== primaryTitle;
+  const readDate = formatReadDate(book.dataPrzeczytania);
 
   // Book-detail popover (cover + blurb from the encyclopedia), opened from the icon.
   const [detailAnchor, setDetailAnchor] = useState<AnchorRect | null>(null);
@@ -117,6 +119,12 @@ export const BookResultCard: React.FC<Props> = ({ book, query }) => {
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {readDate && (
+            <div className="flex items-center gap-1.5 mt-2 text-[10px] font-bold text-cyan-300/70 uppercase tracking-wider">
+              <CheckCircle2 className="w-3 h-3 shrink-0" /> Przeczytano {readDate}
             </div>
           )}
         </div>

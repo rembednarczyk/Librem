@@ -1,6 +1,7 @@
 import React from "react";
 import { BookIndexEntry } from "../../types";
 import { SpineStyle, displayTitle, awardWins, spineFontSize } from "../../utils/bookshelf";
+import { formatReadDate } from "../../utils/readDate";
 
 interface Props {
   book: BookIndexEntry;
@@ -22,7 +23,7 @@ export const BookSpine: React.FC<Props> = ({ book, style, onDragStart, onDragEnd
     draggable
     onDragStart={(e) => { e.dataTransfer.setData("text/plain", book.id); e.dataTransfer.effectAllowed = "move"; onDragStart(book); }}
     onDragEnd={onDragEnd}
-    title={`${displayTitle(book)}${book.author ? " — " + book.author : ""}${book.year ? " (" + book.year + ")" : ""}`}
+    title={`${displayTitle(book)}${book.author ? " — " + book.author : ""}${book.year ? " (" + book.year + ")" : ""}${formatReadDate(book.dataPrzeczytania) ? " · przeczytano " + formatReadDate(book.dataPrzeczytania) : ""}`}
     className="book-spine group relative shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing select-none rounded-[3px_3px_1px_1px] transition-transform duration-150 hover:-translate-y-3"
     style={{
       width: style.width,

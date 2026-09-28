@@ -1,6 +1,7 @@
 import React from "react";
 import { BookIndexEntry } from "../../types";
 import { CLOTH_PALETTE, LIGHT_SPINE_PALETTE, APP_PALETTE, displayTitle } from "../../utils/bookshelf";
+import { formatReadDate } from "../../utils/readDate";
 
 function hash(s: string): number {
   let h = 0;
@@ -16,7 +17,7 @@ export const CoverCard: React.FC<{ book: BookIndexEntry }> = ({ book }) => {
   const i2 = (h >>> 3) % CLOTH_PALETTE.length;
   return (
     <div
-      title={`${displayTitle(book)}${book.author ? " — " + book.author : ""}`}
+      title={`${displayTitle(book)}${book.author ? " — " + book.author : ""}${formatReadDate(book.dataPrzeczytania) ? " · przeczytano " + formatReadDate(book.dataPrzeczytania) : ""}`}
       className="cover-card group relative shrink-0 w-[104px] h-[156px] rounded-[6px_3px_3px_6px] overflow-hidden flex flex-col justify-between p-3 pl-4 transition-transform duration-150 hover:-translate-y-2"
       style={{
         ["--cm-a" as string]: CLOTH_PALETTE[i1], ["--cm-b" as string]: CLOTH_PALETTE[i2],

@@ -81,6 +81,42 @@ describe("computeReadingStats", () => {
     const stats = computeReadingStats([b("1", true), b("2", false)], NOW);
     expect(stats).toEqual({
       perYear: [], totalRead: 1, totalDated: 0, thisYear: 0, lastYear: 0, bestYear: null, recentPace: 0,
+      streaks: { current: 0, longest: 0, longestFrom: null, longestTo: null },
+    });
+  });
+
+  describe("streaks", () => {
+    it("counts the longest run of consecutive read-years", () => {
+      // 2020,2021,2022 consecutive (3), gap, 2024,2025 (2). Longest = 3.
+      const stats = computeReadingStats([
+        b("1", true, "2020-06-01"), b("2", true, "2021-06-01"), b("3", true, "2022-06-01"),
+        b("4", true, "2024-06-01"), b("5", true, "2025-06-01"),
+      ], NOW);
+      expect(stats.streaks.longest).toBe(3);
+      expect(stats.streaks.longestFrom).toBe(2020);
+      expect(stats.streaks.longestTo).toBe(2022);
+    });
+
+    it("reports a live current streak (reaches last year)", () => {
+      // 2024,2025 consecutive, last year 2025 = currentYear-1 → live streak of 2.
+      const stats = computeReadingStats([
+        b("1", true, "2024-06-01"), b("2", true, "2025-06-01"),
+      ], NOW);
+      expect(stats.streaks.current).toBe(2);
+    });
+
+    it("current streak is 0 when the last read year is stale", () => {
+      // Latest read 2023 < currentYear-1 (2025) → not live.
+      const stats = computeReadingStats([
+        b("1", true, "2022-06-01"), b("2", true, "2023-06-01"),
+      ], NOW);
+      expect(stats.streaks.current).toBe(0);
+      expect(stats.streaks.longest).toBe(2);
+    });
+
+    it("a single dated year is a streak of 1 (not counted as a run in the UI)", () => {
+      const stats = computeReadingStats([b("1", true, "2025-06-01")], NOW);
+      expect(stats.streaks).toEqual({ current: 1, longest: 1, longestFrom: 2025, longestTo: 2025 });
     });
   });
 });

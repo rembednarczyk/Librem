@@ -40,6 +40,7 @@ export function toSearchIndex(books: NotionBook[], awardOnly = true): BookIndexE
       series: b.currentSeria || "",
       partOfCycle: b.currentCzesccyklu ?? false,
       shelfOrder: b.shelfOrder,
+      dataPrzeczytania: b.dataPrzeczytania,
       isbns: b.isbns,
       isbnSearch: buildIsbnSearch(b.isbns),
     }));

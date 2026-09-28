@@ -70,6 +70,17 @@ export interface ReadingStats {
   bestYear: ReadingYearCount | null;
   /** Mean books/year over completed years since you started (last 3, current excluded). */
   recentPace: number;
+  /** Reading streaks over consecutive read-years. */
+  streaks: ReadingStreaks;
+}
+
+export interface ReadingStreaks {
+  /** Consecutive read-years ending at a still-live year (current or previous); else 0. */
+  current: number;
+  /** Longest run of consecutive years each with ≥1 read. */
+  longest: number;
+  longestFrom: number | null;
+  longestTo: number | null;
 }
 
 export interface PublisherStat { name: string; count: number; read: number }

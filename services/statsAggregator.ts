@@ -212,7 +212,35 @@ export function computeReadingStats(books: NotionBook[], now: Date = new Date())
     ? Math.round((recentSum / completedYears.length) * 10) / 10
     : 0;
 
-  return { perYear, totalRead: read.length, totalDated, thisYear, lastYear, bestYear, recentPace };
+  return { perYear, totalRead: read.length, totalDated, thisYear, lastYear, bestYear, recentPace, streaks: computeStreaks(perYear, currentYear) };
+}
+
+/**
+ * Reading streaks over the read-YEAR timeline (`perYear`, ascending, only years with
+ * ≥1 read). `longest` = the longest run of consecutive years each with a read.
+ * `current` = the trailing run, but only if it's still „live" — i.e. reaches the
+ * current year or the one before (the current year is in progress, so a streak
+ * through last year still counts). An older last-read year → current streak 0.
+ */
+function computeStreaks(perYear: { year: number; count: number }[], currentYear: number) {
+  if (perYear.length === 0) return { current: 0, longest: 0, longestFrom: null as number | null, longestTo: null as number | null };
+
+  let longest = 1, run = 1, longestTo = perYear[0].year;
+  for (let i = 1; i < perYear.length; i++) {
+    run = perYear[i].year === perYear[i - 1].year + 1 ? run + 1 : 1;
+    if (run > longest) { longest = run; longestTo = perYear[i].year; }
+  }
+
+  // Trailing run length (consecutive years ending at the latest read year).
+  let trailing = 1;
+  for (let i = perYear.length - 1; i > 0; i--) {
+    if (perYear[i].year === perYear[i - 1].year + 1) trailing++;
+    else break;
+  }
+  const lastYear = perYear[perYear.length - 1].year;
+  const current = lastYear >= currentYear - 1 ? trailing : 0;
+
+  return { current, longest, longestFrom: longestTo - longest + 1, longestTo };
 }
 
 export function computeLibraryStats(books: NotionBook[], branches: { sourceTag: string; name: string }[]) {
