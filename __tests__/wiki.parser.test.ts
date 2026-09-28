@@ -153,4 +153,85 @@ describe('WikiParser', () => {
     });
   });
 
+  describe('extractBookInfobox', () => {
+    const wt = `{{Książka
+ | tytuł     = Neuromancer
+ | autor     = William Gibson
+ | grafika   = Neuromancer1.jpg
+ | wydawca   = Alkazar
+ | tłumacz   = Piotr W. Cholewa
+ | autor okladki = Andrzej Łaski
+ | data I wyd pol = 1992
+ | cykl      = Trylogia Ciągu
+}}
+Najsłynniejsza powieść Gibsona.
+
+{{tabela wydania
+|rok1= 1992
+}}`;
+
+    it('pulls the cover filename, edition fields and the blurb', () => {
+      const r = WikiParser.extractBookInfobox(wt);
+      expect(r.coverFile).toBe('Neuromancer1.jpg');
+      expect(r.translator).toBe('Piotr W. Cholewa');
+      expect(r.publisher).toBe('Alkazar');
+      expect(r.coverArtist).toBe('Andrzej Łaski');
+      expect(r.firstPolish).toBe('1992');
+      expect(r.description).toBe('Najsłynniejsza powieść Gibsona.');
+    });
+
+    it('stops the blurb at the next template', () => {
+      expect(WikiParser.extractBookInfobox(wt).description).not.toContain('tabela');
+    });
+
+    it('returns empty fields for wikitext without an infobox', () => {
+      expect(WikiParser.extractBookInfobox('plain text')).toEqual(
+        expect.objectContaining({ coverFile: '', description: '', translator: '' }),
+      );
+    });
+  });
+
+  describe('extractEditions', () => {
+    const wt = `{{tabela wydania
+|hdrs=rok wydania!!okładka!!informacja!!przekład
+|rok1= 1992
+|okladka1= Neuromancer1.jpg
+|informacja1={{infowydanie|wydawca=Alkazar |seria=SF |proj.okladki= Andrzej Łaski|isbn= 8385784012}}
+|przekład1=Piotr W. Cholewa
+
+|rok3=2008, 2009
+|okladka3=Neuromancer3.jpg
+|informacja3={{infowydanie|wydawca=Książnica |proj.okladki=Mariusz Banachowicz |isbn=9788324576395 }}
+
+|rok5= 2025
+|okladka5= Trylogia_ciagu2.jpg
+|informacja5={{infowydanie|wydawca= Mag|proj.okladki= Dark Crayon|isbn= 978-83-68240-61-0}}
+}}`;
+
+    it('parses one row per edition with year, cover, isbn and publisher', () => {
+      const eds = WikiParser.extractEditions(wt);
+      expect(eds).toHaveLength(3);
+      expect(eds[0]).toEqual(expect.objectContaining({
+        year: 1992, coverFile: 'Neuromancer1.jpg', isbn: '8385784012', publisher: 'Alkazar',
+      }));
+      expect(eds[2]).toEqual(expect.objectContaining({
+        year: 2025, coverFile: 'Trylogia_ciagu2.jpg', publisher: 'Mag',
+      }));
+    });
+
+    it('collapses a multi-year label (dodruki) to the latest year', () => {
+      expect(WikiParser.extractEditions(wt)[1].year).toBe(2009);
+    });
+
+    it('picks the newest edition with a cover', () => {
+      const eds = WikiParser.extractEditions(wt).filter(e => e.coverFile && e.year != null);
+      const newest = eds.sort((a, b) => (b.year! - a.year!))[0];
+      expect(newest.coverFile).toBe('Trylogia_ciagu2.jpg');
+    });
+
+    it('returns [] without an editions table', () => {
+      expect(WikiParser.extractEditions('{{Książka|tytuł=X}}')).toEqual([]);
+    });
+  });
+
 });

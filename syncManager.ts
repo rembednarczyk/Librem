@@ -13,6 +13,7 @@ import { IntegrityService } from "./services/integrityService";
 import { LibraryCheckService } from "./services/libraryCheckService";
 import { VintedSyncService } from "./services/vintedSyncService";
 import { CycleLookupService } from "./services/cycleLookupService";
+import { BookDetailService } from "./services/bookDetailService";
 import { CycleHarvestService } from "./services/cycleHarvestService";
 import { IsbnEnrichService } from "./services/isbnEnrichService";
 import { aggregateCycleRows } from "./services/cycleRows";
@@ -60,6 +61,7 @@ const vintedSyncService = new VintedSyncService(notionAdapter, configService);
 const cycleLookupService = new CycleLookupService(notionAdapter, wikiAdapter);
 const cycleHarvestService = new CycleHarvestService(notionAdapter, cycleLookupService, configService);
 const isbnEnrichService = new IsbnEnrichService(notionAdapter);
+const bookDetailService = new BookDetailService(wikiAdapter);
 
 interface SyncTask {
   name: string;
@@ -243,6 +245,12 @@ class SyncManager {
 
   async getCycle(title: string, author: string) {
     return await cycleLookupService.lookup(title, author);
+  }
+
+  /** On-demand book-detail preview (cover + blurb) — Katalog, no DB writes.
+   *  `isbn` (optional) picks the matching edition's cover (e.g. a barcode scan). */
+  async getBookDetail(title: string, author: string, isbn?: string) {
+    return await bookDetailService.lookup(title, author, isbn);
   }
 
   /** Resolves a scanned/typed ISBN to a book (title + author) via Google Books. */

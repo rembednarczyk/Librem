@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.84.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.87.0** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 563 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 573 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,26 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.87.0** — **Skan ISBN → okładka zeskanowanego wydania.** Po trafieniu skanu w Katalogu `SearchSection`
+  auto-otwiera `BookDetailPanel` z zeskanowanym `isbn` (kotwica = przycisk skanu), więc widać okładkę DOKŁADNIE
+  tego wydania w ręku, nie tylko najnowszego (badge „✓ zeskanowane wyd."). `useBookDetail`/`BookDetailPanel`
+  przyjmują `isbn` (URL + klucz cache). Domyka feature podglądu okładki end-to-end. 573 testy.
+- **1.86.0** — **Podgląd okładki + opisu książki w Katalogu (klik w ikonę `BookMarked`).** Nowy read-only
+  `bookDetailService` + `GET /api/book-detail?title=&author=&isbn=`; popover `BookDetailPanel` (portal, wzorzec
+  `CyclePanel`). Parser: `extractBookInfobox` (grafika/blurb) + `extractEditions` (tabela wydań: rok+okładka+ISBN
+  per wydanie). `WikiAdapter.resolveImageUrl` (imageinfo → URL okładki). CSP `img-src` dopuszcza obrazy
+  encyklopedii (ładuje przeglądarka usera). DOMYŚLNIE pokazuje NAJNOWSZĄ okładkę (max rok z tabeli wydań), a `?isbn=`
+  dopasowuje okładkę konkretnego wydania (normalizacja 10↔13). Zweryfikowane empirycznie na realnych danych.
+  7 nowych testów parsera. 573 testy. Follow-up: wpiąć ISBN→okładka w skaner.
+- **1.85.0** — **`WIKI_HTTP_PROXY` — wsparcie klasycznego proxy (tunel CONNECT) w `WikiAdapter`.** Po
+  potwierdzeniu, że blok IP wywala też book sync/diagnostykę (nie tylko podgląd cyklu) i że CF egress jest
+  zablokowany, dołożone wsparcie dla proxy rezydencjalnego. `buildWikiHttpsAgent(env)` (export): gdy
+  `WIKI_HTTP_PROXY` ustawione (`http://[user:pass@]host:port`) → `HttpsProxyAgent` (tunel CONNECT do api.php
+  przez zaufane IP), inaczej zwykły keep-alive agent (domyślnie, zero zmiany). Nowa zależność
+  `https-proxy-agent@^7` (axiosowe wbudowane `proxy` bywa zawodne przy tunelowaniu HTTPS). Dwa mechanizmy
+  współistnieją i są niezależne: `WIKI_PROXY_URL` (URL-swap, reverse-proxy/Worker) vs `WIKI_HTTP_PROXY`
+  (CONNECT, klasyczny proxy). 3 nowe testy agenta. `.env.example` uzupełniony. Agent wybierany przy starcie
+  modułu (env + restart/redeploy). 566 testów. NIC nie zmienia się dopóki env puste.
 - **1.84.0** — **Konfigurowalny egress `WikiAdapter` + Cloudflare Worker (obejście blokady IP encyklopedii).**
   POTWIERDZONE logiem Render: encyklopedia zwraca 403 (`ip_blocked`, zwykła strona Apache — NIE challenge CF) dla
   IP datacenter Render; dotyczy podglądu cyklu ORAZ book sync (ta sama ścieżka). Fix na poziomie adaptera:
@@ -1452,20 +1472,46 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
     proxy zmieniające IP JEST właściwym kierunkiem i NIE trzeba headless-browsera. CF Worker: darmowy, szybki,
     egress z IP Cloudflare (inne niż Render) — realna szansa, że przejdzie. RYZYKO: zakresy egress CF bywają też
     blokowane przez WAF-y; jeśli encyklopedia blokuje też CF, wróci 403. To 20-min eksperyment, nie pewnik.
-  - **ZREALIZOWANE (1.84.0, hydraulika + Worker) — CZEKA NA WDROŻENIE PRZEZ USERA:** `WikiAdapter` ma teraz
-    konfigurowalny egress: `resolveWikiBaseUrl()` czyta `WIKI_PROXY_URL` (puste = origin bezpośrednio, zero zmiany),
-    `WIKI_PROXY_KEY` idzie nagłówkiem `X-Proxy-Key`. Działa dla DOWOLNego proxy i naprawia też book sync. Gotowy
-    `cloudflare/wiki-proxy.js` (reverse-proxy api.php, GET-only, gate na sekret, edge-cache 5 min, przepuszcza
-    status by realny 403 był widoczny). DO ZROBIENIA PO STRONIE USERA: wdrożyć Workera (dashboard/wrangler),
-    ustawić `PROXY_KEY` na Workerze + `WIKI_PROXY_URL`/`WIKI_PROXY_KEY` na Render, redeploy. Instrukcja w nagłówku
-    pliku Workera + `.env.example`. JEŚLI Worker też dostanie 403 (CF egress blokowany) → te same 2 env-y, ale URL
-    proxy rezydencjalnego. ORTOGONALNIE (nie zrobione, opcjonalne): czytać najpierw WIERSZE bazy (Żniwa materializują
-    tomy) i pytać wiki tylko o luki — mniej ruchu, ale nie usuwa samej blokady.
-- **Katalog: klik w ikonę książki → podgląd szczegółów z Encyklopedii (NOWY feature, pomysł usera).** Ikona
-  `BookMarked` w `BookResultCard` (linia ~46) jest dziś CZYSTO DEKORACYJNA (brak `onClick`). Pomysł: klik otwiera
-  popover ze szczegółami książki, analogicznie do `CyclePanel`, przez nowy endpoint serwerowy pobierający stronę
-  wiki tej książki (1 fetch, nie ~34 — dużo lżejszy niż podgląd cyklu). ZALEŻNOŚĆ: dokłada ruch do tego samego
-  egressu co wyżej, więc sensownie robić PO rozstrzygnięciu kwestii pobierania z Encyklopedii. Reuse:
+  - **HYDRAULIKA GOTOWA (1.84.0):** `WikiAdapter` ma konfigurowalny egress — `resolveWikiBaseUrl()` czyta
+    `WIKI_PROXY_URL` (puste = origin bezpośrednio, zero zmiany), `WIKI_PROXY_KEY` → nagłówek `X-Proxy-Key`. Działa
+    dla DOWOLNego reverse-proxy i naprawia też book sync. Gotowy `cloudflare/wiki-proxy.js` (GET-only, gate na
+    sekret, edge-cache 5 min, przepuszcza status). To ZOSTAJE w repo jako punkt wejścia dla przyszłego proxy.
+  - **WYNIK EKSPERYMENTU CF WORKER (2026-09-26): NIE DZIAŁA — CF egress TEŻ zablokowany.** User wdrożył Workera
+    (`librem.remuerte.workers.dev`), ustawił `PROXY_KEY`, przetestował curlem z poprawnym nagłówkiem. Bramka
+    Workera PRZESZŁA (klucz OK — inaczej byłoby samo „Forbidden"), ale encyklopedia zwróciła przez Workera TĘ SAMĄ
+    stronę Apache „403 / You don't have permission" → origin odrzuca też IP Cloudflare. WNIOSEK: blokada obejmuje
+    zakresy IP/ASN chmury OGÓLNIE (dwa różne UA — fałszywy Chrome z Render + `LibremBot` z CF — dwa różne IP
+    chmurowe, oba 403 → to IP, nie UA). Potrzebny adres NIE-chmurowy (rezydencjalny). CF Worker = ślepy zaułek.
+  - **STAN (2026-09-26): sync odparkowany operacyjnie, proxy na Render dalej do decyzji.** Potwierdzono, że blok
+    wywala też book sync + diagnostykę (nie tylko podgląd cyklu). NATYCHMIASTOWE DARMOWE OBEJŚCIE: odpalać sync
+    LOKALNIE z domowego IP (`npm run dev` + te same sekrety Notion → zapis do tej samej bazy; Render tylko czyta).
+    Wzorzec „skanuj z domowego IP, do Notion pisz wynik" — jak w notatce anty-Vinted.
+  - **WSPARCIE PROXY GOTOWE (1.85.0):** `WIKI_HTTP_PROXY` (klasyczny CONNECT, `HttpsProxyAgent`) dołożone — więc
+    opcja „proxy rezydencjalne" NIE wymaga już zmian w kodzie, tylko env-a + zdobycia proxy. Opcje odparkowania:
+    (1) PROXY REZYDENCJALNE (płatne, grosze) → ustaw `WIKI_HTTP_PROXY`, redeploy — Render sam synchronizuje;
+    (2) SELF-HOST reverse-proxy na domowym IP → `WIKI_PROXY_URL` → dom; (3) podgląd cyklu z WIERSZY bazy (Żniwa) —
+    znosi ból podglądu za darmo, ale book sync/Żniwa dalej wymagają nie-chmurowego IP.
+  - **RYZYKO DO POTWIERDZENIA:** skoro to blok IP na chmurę, BOOK SYNC z Rendera najprawdopodobniej też jest teraz
+    martwy (identyczne wywołania `api.php`). User dawno nie synchronizował — warto odpalić małą synchronizację i
+    sprawdzić, czy nie leci 403. Jeśli tak → proxy staje się nie „nice-to-have dla cyklu", tylko WARUNKIEM działania
+    core'owego syncu.
+- **Katalog: klik w ikonę książki → podgląd okładki + opisu z Encyklopedii — ZREALIZOWANE (1.86.0).** Ikona
+  `BookMarked` w `BookResultCard` otwiera `BookDetailPanel` (popover przez portal, wzorzec `CyclePanel`).
+  Backend: `services/bookDetailService.ts` (read-only, `BoundedCache`) → `GET /api/book-detail?title=&author=&isbn=`
+  → getter `syncManager.getBookDetail`. Parser: `WikiParser.extractBookInfobox` (grafika/blurb/pola) +
+  `WikiParser.extractEditions` (tabela wydań: rok+okładka+ISBN per wydanie). `WikiAdapter.resolveImageUrl`
+  (imageinfo → realny URL okładki; `Special:FilePath` na tym wiki nie działa). CSP: dopuszczony `img-src`
+  z `encyklopediafantastyki.pl` (obraz ładuje przeglądarka usera — IP rezydencjalne, nie objęte blokadą).
+  **TODO 2 (najnowsza okładka) — ZROBIONE:** domyślnie pokazujemy okładkę NAJNOWSZEGO wydania z tabeli
+  (max rok), fallback do `|grafika|`. **TODO 1 (match po ISBN) — BACKEND GOTOWY:** `?isbn=` wybiera okładkę
+  wydania o pasującym ISBN (normalizacja 10↔13 + myślniki przez `services/isbn`); zweryfikowane na Neuromancerze
+  (skan 1996 → okładka 1996, skan 2025 → okładka 2025). Panel pokazuje rok wydania + licznik wydań.
+  Lekki: max 2 wywołania wiki (strona + imageinfo), cache per (title|author|isbn).
+  **ISBN→okładka w SKANERZE — ZREALIZOWANE (1.87.0):** po trafieniu skanu (exact/resolved) `SearchSection`
+  auto-otwiera `BookDetailPanel` z zeskanowanym `isbn`, kotwiczony do przycisku skanu → pokazuje okładkę
+  DOKŁADNIE tego wydania (badge „✓ zeskanowane wyd."). Hook/panel przyjmują `isbn` (URL + klucz cache).
+  Feature domknięty end-to-end: skan fizycznej książki → okładka jej wydania.
+- **(historia pomysłu) Katalog: klik w ikonę książki → podgląd z Encyklopedii.** Reuse:
   `WikiAdapter.fetchPageContent` + parser pól (autor/wydania/seria już parsowane w `wiki.parser`), wzorzec
   popovera i `computePopoverPosition` z `CyclePanel`.
 

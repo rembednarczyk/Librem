@@ -5,8 +5,10 @@ import { useBooks } from "../hooks/useBooks";
 import { useIsbnLookup } from "../hooks/useIsbnLookup";
 import { matchBooks, buildSearchVocab, didYouMean, replaceLastToken } from "../utils/bookSearch";
 import { BookResultCard } from "./search/BookResultCard";
+import { BookDetailPanel } from "./search/BookDetailPanel";
 import { ScanModal } from "./search/ScanModal";
 import { scanSupported, cleanScannedCode, matchIsbnInIndex } from "../utils/barcode";
+import { AnchorRect } from "../utils/popoverPosition";
 
 /** Max number of cards we render (DOM guard for an „empty" query = the whole set). */
 const RENDER_CAP = 150;
@@ -24,8 +26,19 @@ export const SearchSection: React.FC = () => {
   const canScan = useMemo(() => scanSupported(), []);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanResolving, setScanResolving] = useState(false);
+  const scanBtnRef = useRef<HTMLButtonElement>(null);
   // Outcome banner after a scan: exact row hit (B), ISBN-resolved title (A), or miss.
   const [scanNotice, setScanNotice] = useState<{ kind: "exact" | "resolved" | "miss"; text: string } | null>(null);
+  // Cover preview auto-opened after a hit — carries the SCANNED isbn so the panel
+  // shows exactly the edition in your hand, not just the newest one.
+  const [scanDetail, setScanDetail] = useState<{ title: string; author: string; isbn: string; anchor: AnchorRect } | null>(null);
+
+  const anchorFromScanBtn = (): AnchorRect | null => {
+    const el = scanBtnRef.current ?? inputRef.current;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width };
+  };
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -66,8 +79,11 @@ export const SearchSection: React.FC = () => {
 
       const direct = matchIsbnInIndex(code, index);
       if (direct) {
-        setQuery(direct.plTitle || direct.origTitle);
-        setScanNotice({ kind: "exact", text: `Znaleziono: „${direct.plTitle || direct.origTitle}"` });
+        const t = direct.plTitle || direct.origTitle;
+        setQuery(t);
+        setScanNotice({ kind: "exact", text: `Znaleziono: „${t}"` });
+        const anchor = anchorFromScanBtn();
+        if (anchor) setScanDetail({ title: t, author: direct.author || "", isbn: code, anchor });
         return;
       }
 
@@ -76,6 +92,8 @@ export const SearchSection: React.FC = () => {
       if (book?.title) {
         setQuery(book.title);
         setScanNotice({ kind: "resolved", text: `Rozpoznano przez ISBN: „${book.title}" — szukam w katalogu` });
+        const anchor = anchorFromScanBtn();
+        if (anchor) setScanDetail({ title: book.title, author: typeof book.author === "string" ? book.author : "", isbn: code, anchor });
       } else {
         setScanNotice({ kind: "miss", text: `Nie znaleziono w katalogu książki o ISBN ${code}.` });
       }
@@ -143,6 +161,7 @@ export const SearchSection: React.FC = () => {
           </div>
           {canScan && (
             <button
+              ref={scanBtnRef}
               onClick={() => setScanOpen(true)}
               disabled={scanResolving}
               title="Skanuj kod kreskowy książki"
@@ -176,6 +195,17 @@ export const SearchSection: React.FC = () => {
       </div>
 
       <ScanModal open={scanOpen} onClose={() => setScanOpen(false)} onDetect={handleScanDetect} />
+
+      {/* After a scan hit: the cover of the SCANNED edition (isbn passed through). */}
+      {scanDetail && (
+        <BookDetailPanel
+          title={scanDetail.title}
+          author={scanDetail.author}
+          isbn={scanDetail.isbn}
+          anchor={scanDetail.anchor}
+          onClose={() => setScanDetail(null)}
+        />
+      )}
 
       {/* Counter (hidden on the mobile clean screen) */}
       {books && !loading && !browseSuppressed && (

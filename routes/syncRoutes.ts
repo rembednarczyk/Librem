@@ -46,6 +46,7 @@ router.post("/vinted-resolve-sellers", syncController.resolveVintedSellers);
 router.post("/vinted-resolve-sellers/stop", syncController.stopVintedResolveSellers);
 router.get("/vinted-stored", syncController.getVintedStored);
 router.get("/cycle", syncController.getCycle);
+router.get("/book-detail", syncController.getBookDetail);
 router.get("/isbn/:code", syncController.getIsbn);
 router.get("/scan-debug/:code", syncController.getScanDebug);
 router.get("/cycles-harvest", syncController.getCyclesHarvest);

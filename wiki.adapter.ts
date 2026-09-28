@@ -1,36 +1,54 @@
 import axios from "axios";
 import http from "http";
 import https from "https";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { withRetry } from "./retry";
 import { createLogger, classifyHttpError, ErrorClass } from "./logger";
 
 const log = createLogger("WikiAdapter");
 
 const httpAgent = new http.Agent({ keepAlive: true });
-const httpsAgent = new https.Agent({ keepAlive: true });
 
 /** The encyclopedia's MediaWiki API — the direct origin. */
 const WIKI_ORIGIN = "https://encyklopediafantastyki.pl/api.php";
 
 /**
  * Egress target for the encyclopedia API. The origin 403-blocks datacenter IPs
- * (e.g. Render), so `WIKI_PROXY_URL` can point every request at a proxy whose IP
- * the origin accepts — typically a Cloudflare Worker that replays the same query
- * params to `api.php` (see `cloudflare/wiki-proxy.js`). Unset = direct (default,
+ * (e.g. Render), so `WIKI_PROXY_URL` can point every request at a reverse proxy
+ * that replays the same query params to `api.php` (URL-swap style — e.g. the
+ * Cloudflare Worker in `cloudflare/wiki-proxy.js`). Unset = direct (default,
  * unchanged). Read at call time so it's env-driven and testable.
+ *
+ * Note: this is the URL-SWAP mechanism. For a classic residential HTTP proxy
+ * (CONNECT tunnel) the origin URL stays the same and the connection is routed —
+ * see `WIKI_HTTP_PROXY` / `buildWikiHttpsAgent`. The two are independent and may
+ * be combined, though normally you use one.
  */
 export function resolveWikiBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   return env.WIKI_PROXY_URL?.trim() || WIKI_ORIGIN;
 }
 
-// Shared secret for the proxy: sent as a header so the Worker can reject anyone
-// but us (an open proxy would get the Worker itself blocked). Harmless when
-// talking to the origin directly — MediaWiki ignores the unknown header.
+/**
+ * HTTPS agent for encyclopedia calls. When `WIKI_HTTP_PROXY` is set (a classic
+ * proxy URL, `http://[user:pass@]host:port`), requests tunnel through it via
+ * CONNECT — the fix for the cloud-IP block when a Cloudflare Worker's egress is
+ * ALSO blocked and only a non-datacenter (residential) IP gets through. Unset =
+ * a plain keep-alive agent (direct, unchanged). Chosen at module load, so set
+ * the env and restart/redeploy.
+ */
+export function buildWikiHttpsAgent(env: NodeJS.ProcessEnv = process.env): http.Agent {
+  const proxy = env.WIKI_HTTP_PROXY?.trim();
+  return proxy ? new HttpsProxyAgent(proxy, { keepAlive: true }) : new https.Agent({ keepAlive: true });
+}
+
+// Shared secret for the reverse proxy: sent as a header so the Worker can reject
+// anyone but us (an open proxy would get the Worker itself blocked). Harmless
+// when talking to the origin directly — MediaWiki ignores the unknown header.
 const proxyKey = process.env.WIKI_PROXY_KEY?.trim();
 
 const wikiAxios = axios.create({
   httpAgent,
-  httpsAgent,
+  httpsAgent: buildWikiHttpsAgent(),
   timeout: 30000,
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36',
@@ -106,6 +124,38 @@ export class WikiAdapter {
         `Nie udało się pobrać strony "${title}" z encyklopedii (${info.class}${info.status ? ` / HTTP ${info.status}` : ""}). ${info.hint}`,
         info
       );
+    }
+  }
+
+  /**
+   * Resolves a bare image filename (e.g. „Neuromancer1.jpg", from the `|grafika=`
+   * infobox field) to its direct URL on the wiki, via `prop=imageinfo`. Returns ""
+   * when the file is missing. Used by the on-demand book-detail preview to point an
+   * `<img>` at the real cover — this wiki's `Special:FilePath` is misconfigured, so
+   * the API is the reliable path. Best-effort: a failure returns "" (no cover), it
+   * does NOT throw — a missing cover must not sink the whole preview.
+   */
+  async resolveImageUrl(filename: string): Promise<string> {
+    const name = (filename || "").trim();
+    if (!name) return "";
+    try {
+      const response = await withRetry(() => wikiAxios.get(this.baseUrl, {
+        params: {
+          action: "query",
+          titles: `Plik:${name}`,
+          prop: "imageinfo",
+          iiprop: "url",
+          format: "json",
+          formatversion: 2
+        }
+      }), 3, 2000);
+      const pages = response.data.query?.pages;
+      const page = Array.isArray(pages) ? pages[0] : pages?.[Object.keys(pages ?? {})[0]];
+      const url = page?.imageinfo?.[0]?.url;
+      return typeof url === "string" ? url : "";
+    } catch (error: any) {
+      log.warn(`Nie udało się rozwiązać URL okładki „${name}"`, { message: error?.message });
+      return "";
     }
   }
 
