@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { SyncEvent } from "../src/types";
 import { syncManager } from "../syncManager";
-import { createLogger } from "../logger";
+import { createLogger, sanitizeErrorMessage } from "../logger";
 
 const log = createLogger("SSE");
 
@@ -94,10 +94,9 @@ export const executeSyncTask = async (
       status: error?.status,
       stack: error?.stack?.split("\n").slice(0, 4).join(" | "),
     });
-    // WikiFetchError carries userHint with a concrete tip — show it to the user.
-    const userMessage = error?.userHint
-      ? `${error.message}`
-      : error?.message || errorMessage;
+    // WikiFetchError's message already carries its userHint; sanitize so a Notion
+    // error flowing through a sync task can't leak the database id over SSE.
+    const userMessage = sanitizeErrorMessage(error, errorMessage);
     sendEvent({ type: "error", error: userMessage });
     res.end();
   }

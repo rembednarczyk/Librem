@@ -14,7 +14,7 @@
 
 ## Stan bieżący
 
-- Wersja aplikacji: **1.87.1** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
+- Wersja aplikacji: **1.87.2** (źródło prawdy: `metadata.json`; mirror w `package.json` + `package-lock.json`).
 - **Nazwa projektu: „Librem"** (rebranding z „Cogitator Omnissiah", 1.81.0–1.81.1). Plik wytycznych to
   `LIBREM_GUIDELINES.md`. ZERO wystąpień starej nazwy w repo.
 - **`render.yaml` NIE jest podpięty jako Blueprint** (zweryfikowane przez użytkownika w dashboardzie —
@@ -36,7 +36,7 @@
 - **Konwencja PR/issue**: jedna logiczna zmiana = jeden granularny PR (nie batchujemy).
   Każde zadanie śledzimy issue i domykamy przez `Fixes #N` w opisie PR (linkowanie +
   auto-close). Nie tworzymy sztucznych PR-ów/issue bez realnej wartości.
-- Suite: 578 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
+- Suite: 583 testów zielonych; `npm run lint` (tsc) czysty; `npm run build` OK.
 
 ## Findings & decyzje (aktualne)
 
@@ -85,6 +85,13 @@
 
 Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze na górze.
 
+- **1.87.2** — **Reszta security-sweep [8] + fix latentnego typu.** (a) Ciasteczka Vinted scope'owane do hosta
+  (`browserPrime` → `context.cookies(VINTED_HOME)`, obce cookies nie jadą w nagłówku). (b) `sanitizeErrorMessage`
+  (`logger.ts`) redaguje Notion-ID (UUID/32-hex → `[id]`) w odpowiedziach HTTP — 16 zwrotów `syncController`
+  + `sseStream`; pełny błąd dalej w logu serwera. (c) `nanoid` przypięty przez `overrides: ^3.3.18` (3.3.19,
+  high vuln zamknięty; `qs` moderate zostaje — z express, brak fixu bez breaka). PRZY OKAZJI: naprawiony
+  latentny błąd typu w `usePopoverDismiss.test.tsx` (mock typowany `vi.fn<() => void>()`) — przeoczony w 1.87.1,
+  bo nie odpaliłem `npm run lint` po dodaniu testu (vitest leci przez esbuild, nie tsc). 10 nowych testów. 583.
 - **1.87.1** — **Popovery przewijalne (fix) + ujednolicenie zamykania.** `CyclePanel`/`BookDetailPanel`
   zamykały się na KAŻDY scroll (listener capture na window), więc nie dało się przewinąć ich treści mimo
   `overflow-y-auto` — szczególnie na tapie. Nowy wspólny hook `usePopoverDismiss(ref, onClose)`: Esc + resize +
@@ -1651,9 +1658,12 @@ Wersja ze źródła prawdy `metadata.json` (mirror w `package.json`). Najnowsze 
   - **[8] Drobne — CSP ✅ ZROBIONE (1.78.0, PR #359)**: `middleware/securityHeaders.ts` (CSP z `frame-ancestors
     'none'`, `object-src 'none'`, `img-src` ograniczony do self/data/vinted, `connect-src 'self'`) + `nosniff` +
     `X-Frame-Options: DENY` + `Referrer-Policy: same-origin`; zweryfikowane realnym Chromium/Playwright (0
-    naruszeń, React montuje się poprawnie). RESZTA OTWARTA: ciasteczka Vinted spłaszczane bez
-    scope’u hosta (`cookies.ts` + `browserPrime.ts:73` bierze WSZYSTKIE ciasteczka kontekstu), `error.message`
-    z upstreamu zwracany dosłownie (leak ID bazy w komunikacie Notion), `nanoid` w npm audit (build-time only).
+    naruszeń, React montuje się poprawnie). **RESZTA — ✅ NAPRAWIONE (1.87.2):** (a) ciasteczka Vinted scope'owane
+    do hosta — `browserPrime` używa `context.cookies(VINTED_HOME)` (tylko cookies wysyłane na Vinted, obce nie
+    jadą w `Cookie`); (b) leak ID bazy — `sanitizeErrorMessage` w `logger.ts` redaguje Notion-ID (UUID/32-hex →
+    `[id]`) przed odpowiedzią, zastosowany w 16 zwrotach `syncController` + `sseStream` (pełny komunikat dalej
+    logowany serwerowo); (c) `nanoid` → `overrides: ^3.3.18` (jest 3.3.19, high vuln zamknięty). ZOSTAJE:
+    `qs` moderate (z express, brak fixu bez breaka) — do obserwacji.
   - **ZWERYFIKOWANE JAKO CZYSTE** (nie powtarzać audytu): zero XSS (brak jakiegokolwiek sinka HTML w `src/`),
     zero sekretów w drzewie i w 286 commitach historii, klucz Notion nigdy nie logowany/nie zwracany/nie w bundlu,
     `mergeConfig` wzorowy (neutralizuje też prototype pollution), Basic Auth poprawny (`timingSafeEqual`, montowany

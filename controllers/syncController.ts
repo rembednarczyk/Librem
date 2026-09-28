@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { syncManager, SyncTaskName, configService } from "../syncManager";
 import { SyncParams } from "../src/types";
-import { createLogger } from "../logger";
+import { createLogger, sanitizeErrorMessage } from "../logger";
 import { executeSyncTask } from "./sseStream";
 import { normalizeIsbn } from "../services/isbn";
 
@@ -22,7 +22,7 @@ export const getStats = async (req: Request, res: Response) => {
     res.json(stats);
   } catch (error: any) {
     log.error("Stats error", { message: error.message });
-    res.status(500).json({ error: error.message || "Wystąpił błąd podczas pobierania statystyk." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Wystąpił błąd podczas pobierania statystyk.") });
   }
 };
 
@@ -37,7 +37,7 @@ export const getBooks = async (req: Request, res: Response) => {
     res.json(books);
   } catch (error: any) {
     log.error("Books error", { message: error.message });
-    res.status(500).json({ error: error.message || "Wystąpił błąd podczas pobierania rekordów." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Wystąpił błąd podczas pobierania rekordów.") });
   }
 };
 
@@ -49,7 +49,7 @@ export const getWikiLastUpdate = async (req: Request, res: Response) => {
     res.json({ lastUpdate });
   } catch (error: any) {
     log.error("Wiki last-update error", { message: error.message });
-    res.status(500).json({ error: error.message || "Wystąpił błąd podczas pobierania daty aktualizacji." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Wystąpił błąd podczas pobierania daty aktualizacji.") });
   }
 };
 
@@ -60,7 +60,7 @@ export const getDiagnostics = async (req: Request, res: Response) => {
     res.json(report);
   } catch (error: any) {
     log.error("Diagnostics endpoint failed", { message: error?.message });
-    res.status(500).json({ error: error?.message || "Diagnostyka nie powiodła się." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Diagnostyka nie powiodła się.") });
   }
 };
 
@@ -83,7 +83,7 @@ export const getAppConfig = async (req: Request, res: Response) => {
   try {
     res.json(await configService.getConfig(req.query.force === "1"));
   } catch (error: any) {
-    res.status(500).json({ error: error.message || "Nie udało się odczytać konfiguracji." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Nie udało się odczytać konfiguracji.") });
   }
 };
 
@@ -92,7 +92,7 @@ export const updateAppConfig = async (req: Request, res: Response) => {
   try {
     res.json(await configService.saveConfig(req.body));
   } catch (error: any) {
-    res.status(400).json({ error: error.message || "Nie udało się zapisać konfiguracji." });
+    res.status(400).json({ error: sanitizeErrorMessage(error, "Nie udało się zapisać konfiguracji.") });
   }
 };
 
@@ -105,7 +105,7 @@ export const getNotionSchema = async (req: Request, res: Response) => {
     res.json(properties);
   } catch (error: any) {
     log.error("Notion schema error", { message: error.message });
-    res.status(500).json({ error: error.message || "Wystąpił błąd podczas pobierania schematu." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Wystąpił błąd podczas pobierania schematu.") });
   }
 };
 
@@ -156,7 +156,7 @@ export const updateNotionSchema = async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error: any) {
     log.error("Schema Update Error", { message: error?.message });
-    res.status(500).json({ error: error.message || "Wystąpił błąd podczas aktualizacji schematu." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Wystąpił błąd podczas aktualizacji schematu.") });
   }
 };
 
@@ -248,7 +248,7 @@ export const markAsRead = async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error: any) {
     log.error("Mark as read error", { message: error.message });
-    res.status(500).json({ error: error.message || "Wystąpił błąd podczas oznaczania pozycji." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Wystąpił błąd podczas oznaczania pozycji.") });
   }
 };
 
@@ -272,7 +272,7 @@ export const updateShelfOrders = async (req: Request, res: Response) => {
     res.json({ success: true, updated: entries.length });
   } catch (error: any) {
     log.error("Shelf order error", { message: error.message });
-    res.status(500).json({ error: error.message || "Nie udało się zapisać porządku regału." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Nie udało się zapisać porządku regału.") });
   }
 };
 
@@ -288,7 +288,7 @@ export const unmarkAsRead = async (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error: any) {
     log.error("Unmark as read error", { message: error.message });
-    res.status(500).json({ error: error.message || "Wystąpił błąd podczas usuwania znacznika." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Wystąpił błąd podczas usuwania znacznika.") });
   }
 };
 
@@ -331,7 +331,7 @@ export const getVintedStored = async (_req: Request, res: Response) => {
   try {
     res.json(await syncManager.getVintedStored());
   } catch (error: any) {
-    res.status(500).json({ error: error.message || "Błąd odczytu składowanych danych Vinted." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Błąd odczytu składowanych danych Vinted.") });
   }
 };
 
@@ -350,7 +350,7 @@ export const getCycle = async (req: Request, res: Response) => {
     res.json(view);
   } catch (error: any) {
     log.error("Cycle lookup error", { title, message: error?.message });
-    res.status(500).json({ error: error.message || "Błąd podglądu cyklu." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Błąd podglądu cyklu.") });
   }
 };
 
@@ -365,7 +365,7 @@ export const getBookDetail = async (req: Request, res: Response) => {
     res.json(detail);
   } catch (error: any) {
     log.error("Book detail error", { title, message: error?.message });
-    res.status(500).json({ error: error.message || "Błąd podglądu szczegółów książki." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Błąd podglądu szczegółów książki.") });
   }
 };
 
@@ -379,7 +379,7 @@ export const getIsbn = async (req: Request, res: Response) => {
     res.json(book);
   } catch (error: any) {
     log.error("ISBN lookup error", { isbn, message: error?.message });
-    res.status(500).json({ error: error.message || "Błąd wyszukiwania ISBN." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Błąd wyszukiwania ISBN.") });
   }
 };
 
@@ -390,7 +390,7 @@ export const getScanDebug = async (req: Request, res: Response) => {
     res.json(result);
   } catch (error: any) {
     log.error("Scan debug error", { code, message: error?.message });
-    res.status(500).json({ error: error.message || "Błąd diagnostyki skanu." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Błąd diagnostyki skanu.") });
   }
 };
 
@@ -400,7 +400,7 @@ export const getCyclesHarvest = async (req: Request, res: Response) => {
     res.json(await syncManager.getCyclesHarvest(fresh));
   } catch (error: any) {
     log.error("Cycles harvest read error", { message: error?.message });
-    res.status(500).json({ error: error.message || "Błąd odczytu zebranych cykli." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Błąd odczytu zebranych cykli.") });
   }
 };
 

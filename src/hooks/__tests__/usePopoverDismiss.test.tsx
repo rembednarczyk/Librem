@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { usePopoverDismiss } from "../usePopoverDismiss";
 
@@ -17,8 +17,8 @@ const Probe: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 describe("usePopoverDismiss", () => {
-  let onClose: ReturnType<typeof vi.fn>;
-  beforeEach(() => { onClose = vi.fn(); render(<Probe onClose={onClose} />); });
+  let onClose: Mock<() => void>;
+  beforeEach(() => { onClose = vi.fn<() => void>(); render(<Probe onClose={onClose} />); });
 
   it("closes on Escape", () => {
     fireEvent.keyDown(window, { key: "Escape" });

@@ -61,11 +61,15 @@ export async function primeWithBrowser(opts: { timeoutMs: number }): Promise<Vin
     await page.goto(VINTED_HOME, { waitUntil: "domcontentloaded", timeout: opts.timeoutMs });
 
     // Poll until Cloudflare sets `cf_clearance` (the challenge runs async), bounded by timeout.
+    // Scope to the Vinted host: `cookies(url)` returns only cookies that would be sent to
+    // that URL, so a third-party cookie the challenge page happened to set never rides along
+    // in our `Cookie` header (host-scoping — security sweep [8]). cf_clearance is set on the
+    // Vinted domain, so it's still included.
     const deadline = Date.now() + opts.timeoutMs;
-    let cookies: any[] = await context.cookies();
+    let cookies: any[] = await context.cookies(VINTED_HOME);
     while (!cookies.some((c) => c.name === "cf_clearance") && Date.now() < deadline) {
       await page.waitForTimeout(500);
-      cookies = await context.cookies();
+      cookies = await context.cookies(VINTED_HOME);
     }
 
     const userAgent: string = await page.evaluate(() => navigator.userAgent);
